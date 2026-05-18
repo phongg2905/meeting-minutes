@@ -1,0 +1,67 @@
+# =============================
+# Dependencies
+# =============================
+node_modules/
+.pnp
+.pnp.js
+
+# =============================
+# Build outputs
+# =============================
+dist/
+build/
+
+# =============================
+# Environment variables (SENSITIVE!)
+# =============================
+.env
+.env.local
+.env.*.local
+
+# =============================
+# Logs
+# =============================
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+server.out.log
+server.err.log
+client.out.log
+client.err.log
+
+# =============================
+# OS files
+# =============================
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# =============================
+# IDE / Editor
+# =============================
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# =============================
+# Prisma
+# =============================
+# Giữ lại schema.prisma và migrations, bỏ generated client (do prisma generate tạo ra)
+# Nếu dùng Prisma Client output mặc định thì không cần ignore gì thêm
+
+# =============================
+# TypeScript
+# =============================
+*.tsbuildinfo
+
+# =============================
+# Testing
+# =============================
+coverage/
