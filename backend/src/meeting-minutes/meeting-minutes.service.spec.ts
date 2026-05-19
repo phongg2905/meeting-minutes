@@ -184,4 +184,26 @@ describe('MeetingMinutesService permissions', () => {
       discussion_content: 'Nội dung',
     }, 2)).rejects.toThrow('Mã biên bản da ton tai');
   });
+
+  it('uses the user-provided minute code after trimming whitespace', async () => {
+    const { service, prisma } = createService();
+    prisma.meetingMinute.create.mockResolvedValue({ ...baseMinute, minute_code: 'BB-CUSTOM-01' });
+
+    await service.create({
+      minute_code: '  BB-CUSTOM-01  ',
+      type_id: 1,
+      title: 'Hop lop',
+      class_name: 'CNTT01',
+      meeting_date: '2026-05-18',
+      start_time: '08:00',
+      end_time: '09:00',
+      discussion_content: 'Noi dung',
+    }, 2);
+
+    expect(prisma.meetingMinute.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        minute_code: 'BB-CUSTOM-01',
+      }),
+    }));
+  });
 });
