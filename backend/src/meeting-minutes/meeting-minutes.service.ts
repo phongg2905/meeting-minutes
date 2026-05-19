@@ -125,12 +125,14 @@ export class MeetingMinutesService {
     }
     if (dto.is_public) this.assertPublicDataIsSafe(dto);
     this.validateMeetingTime(dto.start_time, dto.end_time);
+    const minuteCode = this.normalizeMinuteCode(dto.minute_code);
+    if (!minuteCode) throw new BadRequestException('Vui long nhap ma bien ban');
 
     let minute;
     try {
       minute = await this.prisma.meetingMinute.create({
         data: {
-          minute_code: dto.minute_code || await this.generateCode(),
+          minute_code: minuteCode,
           type_id: dto.type_id,
           created_by: userId,
           title: dto.title,
@@ -161,7 +163,7 @@ export class MeetingMinutesService {
       });
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
-        throw new BadRequestException('Mã biên bản da ton tai, vui long tao lai hoac bo trong de he thong tu sinh ma moi');
+        throw new BadRequestException('Mã biên bản đã tồn tại, vui lòng nhập mã khác');
       }
       throw error;
     }
@@ -196,41 +198,53 @@ export class MeetingMinutesService {
       dto.end_time ?? this.toTimeString(existing.end_time),
     );
 
-    const minute = await this.prisma.$transaction(async (tx) => {
-      if (dto.participants) await tx.minuteParticipant.deleteMany({ where: { minute_id: id } });
-      if (dto.tasks) await tx.minuteTask.deleteMany({ where: { minute_id: id } });
+    let minute;
+    try {
+      minute = await this.prisma.$transaction(async (tx) => {
+        if (dto.participants) await tx.minuteParticipant.deleteMany({ where: { minute_id: id } });
+        if (dto.tasks) await tx.minuteTask.deleteMany({ where: { minute_id: id } });
 
-      return tx.meetingMinute.update({
-        where: { minute_id: id },
-        data: {
-          type_id: dto.type_id,
-          title: dto.title,
-          class_name: dto.class_name,
-          meeting_date: dto.meeting_date ? new Date(dto.meeting_date) : undefined,
-          start_time: dto.start_time ? new Date(`1970-01-01T${dto.start_time}:00`) : undefined,
-          end_time: dto.end_time ? new Date(`1970-01-01T${dto.end_time}:00`) : undefined,
-          location: dto.location,
-          meeting_form: dto.meeting_form,
-          host_name: dto.host_name,
-          secretary_name: dto.secretary_name,
-          attendee_summary: dto.attendee_summary,
-          absentee_summary: dto.absentee_summary,
-          purpose: dto.purpose,
-          discussion_content: dto.discussion_content,
-          conclusion_content: dto.conclusion_content,
-          followup_summary: dto.followup_summary,
-          status: nextStatus,
-          is_public: nextIsPublic,
-          published_at: nextIsPublic ? new Date() : nextIsPublic === false ? null : undefined,
-          reviewed_by: undefined,
-          reviewed_at: undefined,
-          review_note: dto.review_note,
-          participants: dto.participants ? { createMany: { data: this.toParticipantCreateData(dto.participants) } } : undefined,
-          tasks: dto.tasks ? { createMany: { data: this.toTaskCreateData(dto.tasks) } } : undefined,
-        },
-        include: { minute_type: true, participants: true, tasks: true },
+        const minuteCode = dto.minute_code === undefined ? undefined : this.normalizeMinuteCode(dto.minute_code);
+        if (minuteCode === '') throw new BadRequestException('Vui long nhap ma bien ban');
+
+        return tx.meetingMinute.update({
+          where: { minute_id: id },
+          data: {
+            minute_code: minuteCode,
+            type_id: dto.type_id,
+            title: dto.title,
+            class_name: dto.class_name,
+            meeting_date: dto.meeting_date ? new Date(dto.meeting_date) : undefined,
+            start_time: dto.start_time ? new Date(`1970-01-01T${dto.start_time}:00`) : undefined,
+            end_time: dto.end_time ? new Date(`1970-01-01T${dto.end_time}:00`) : undefined,
+            location: dto.location,
+            meeting_form: dto.meeting_form,
+            host_name: dto.host_name,
+            secretary_name: dto.secretary_name,
+            attendee_summary: dto.attendee_summary,
+            absentee_summary: dto.absentee_summary,
+            purpose: dto.purpose,
+            discussion_content: dto.discussion_content,
+            conclusion_content: dto.conclusion_content,
+            followup_summary: dto.followup_summary,
+            status: nextStatus,
+            is_public: nextIsPublic,
+            published_at: nextIsPublic ? new Date() : nextIsPublic === false ? null : undefined,
+            reviewed_by: undefined,
+            reviewed_at: undefined,
+            review_note: dto.review_note,
+            participants: dto.participants ? { createMany: { data: this.toParticipantCreateData(dto.participants) } } : undefined,
+            tasks: dto.tasks ? { createMany: { data: this.toTaskCreateData(dto.tasks) } } : undefined,
+          },
+          include: { minute_type: true, participants: true, tasks: true },
+        });
       });
-    });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        throw new BadRequestException('Mã biên bản đã tồn tại, vui lòng nhập mã khác');
+      }
+      throw error;
+    }
 
     await this.activityLogs.log(
       userId,
@@ -359,19 +373,8 @@ export class MeetingMinutesService {
     };
   }
 
-  private async generateCode(): Promise<string> {
-    const now = new Date();
-    const yearMonth = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}`;
-    const latest = await this.prisma.meetingMinute.findFirst({
-      orderBy: { minute_id: 'desc' },
-      select: { minute_id: true },
-    });
-    const nextId = (latest?.minute_id || 0) + 1;
-    return this.formatMinuteCode(yearMonth, nextId);
-  }
-
-  private formatMinuteCode(yearMonth: string, id: number) {
-    return `BB-${yearMonth}-${String(id).padStart(4, '0')}`;
+  private normalizeMinuteCode(code?: string) {
+    return code?.trim();
   }
 
   private validateMeetingTime(startTime?: string, endTime?: string) {

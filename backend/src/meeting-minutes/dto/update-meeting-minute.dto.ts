@@ -1,7 +1,8 @@
-import { IsArray, IsBoolean, IsDateString, IsInt, IsOptional, IsString } from 'class-validator';
+import { IsArray, IsBoolean, IsDateString, IsInt, IsOptional, IsString, MaxLength } from 'class-validator';
 import { CreateParticipantDto, CreateTaskDto } from './create-meeting-minute.dto';
 
 export class UpdateMeetingMinuteDto {
+  @IsOptional() @IsString() @MaxLength(50) minute_code?: string;
   @IsOptional() @IsInt() type_id?: number;
   @IsOptional() @IsString() title?: string;
   @IsOptional() @IsString() class_name?: string;

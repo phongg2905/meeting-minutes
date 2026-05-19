@@ -44,6 +44,7 @@ export default function MeetingForm({ initialValues, onSubmit, loading, mode = '
   const handleFinish = (values: any) => {
     onSubmit({
       ...values,
+      minute_code: values.minute_code?.trim(),
       meeting_date: values.meeting_date?.format('YYYY-MM-DD'),
       start_time: values.start_time?.format('HH:mm'),
       end_time: values.end_time?.format('HH:mm'),
@@ -154,6 +155,18 @@ export default function MeetingForm({ initialValues, onSubmit, loading, mode = '
       <Card style={{ marginBottom: 16, borderRadius: 12 }}>
         <Title level={5} style={{ color: '#0f2644', marginBottom: 20 }}>Thông tin cơ bản</Title>
         <Row gutter={[16, 0]}>
+          <Col xs={24} md={12}>
+            <Form.Item
+              label="Mã biên bản"
+              name="minute_code"
+              rules={[
+                { required: true, message: 'Nhập mã biên bản' },
+                { max: 50, message: 'Mã biên bản tối đa 50 ký tự' },
+              ]}
+            >
+              <Input placeholder="VD: BB-202605-0001" maxLength={50} />
+            </Form.Item>
+          </Col>
           <Col xs={24} md={12}>
             <Form.Item label="Loại biên bản" name="type_id" rules={[{ required: true, message: 'Chọn loại biên bản' }]}>
               <Select placeholder="Chọn loại biên bản" options={(types || []).map((t: MinuteType) => ({ value: t.type_id, label: t.type_name }))} />

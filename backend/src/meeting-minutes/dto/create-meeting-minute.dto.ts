@@ -1,4 +1,4 @@
-import { IsArray, IsBoolean, IsDateString, IsInt, IsOptional, IsString } from 'class-validator';
+import { IsArray, IsBoolean, IsDateString, IsInt, IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class CreateParticipantDto {
@@ -15,7 +15,7 @@ export class CreateTaskDto {
 }
 
 export class CreateMeetingMinuteDto {
-  @ApiProperty({ required: false }) @IsOptional() @IsString() minute_code?: string;
+  @ApiProperty() @IsString() @IsNotEmpty() @MaxLength(50) minute_code: string;
   @ApiProperty() @IsInt() type_id: number;
   @ApiProperty() @IsString() title: string;
   @ApiProperty() @IsString() class_name: string;
