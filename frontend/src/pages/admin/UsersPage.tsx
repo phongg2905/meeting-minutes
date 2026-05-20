@@ -3,7 +3,7 @@ import {
   Table, Button, Tag, Space, Popconfirm, message, Card, Modal,
   Form, Input, Select, Switch, Typography, Avatar, Tooltip
 } from 'antd'
-import { PlusOutlined, EditOutlined, DeleteOutlined, LockOutlined, UnlockOutlined } from '@ant-design/icons'
+import { PlusOutlined, EditOutlined, DeleteOutlined, LockOutlined, UnlockOutlined, SearchOutlined } from '@ant-design/icons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { usersService, rolesService } from '../../services'
 import { formatDateTime } from '../../utils'
@@ -15,11 +15,21 @@ export default function UsersPage() {
   const queryClient = useQueryClient()
   const [modalOpen, setModalOpen] = useState(false)
   const [editingUser, setEditingUser] = useState<User | null>(null)
+  const [page, setPage] = useState(1)
+  const [search, setSearch] = useState('')
+  const [roleFilter, setRoleFilter] = useState<number>()
+  const [statusFilter, setStatusFilter] = useState<string>()
   const [form] = Form.useForm()
 
-  const { data: users, isLoading } = useQuery({
-    queryKey: ['users'],
-    queryFn: usersService.getAll,
+  const { data, isLoading } = useQuery({
+    queryKey: ['users', { page, search, roleFilter, statusFilter }],
+    queryFn: () => usersService.getAll({
+      page,
+      limit: 10,
+      search: search || undefined,
+      role_id: roleFilter,
+      status: statusFilter,
+    }),
   })
 
   const { data: roles } = useQuery({
@@ -181,14 +191,50 @@ export default function UsersPage() {
         </Button>
       </div>
 
+      <Card style={{ marginBottom: 16, boxShadow: '0 1px 6px rgba(0,0,0,0.05)' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
+          <Input
+            prefix={<SearchOutlined />}
+            placeholder="Tìm tên, email, số điện thoại..."
+            value={search}
+            onChange={(e) => { setSearch(e.target.value); setPage(1) }}
+            allowClear
+          />
+          <Select
+            placeholder="Vai trò"
+            value={roleFilter}
+            onChange={(value) => { setRoleFilter(value); setPage(1) }}
+            allowClear
+            options={(roles || []).map((r: Role) => ({ value: r.role_id, label: r.role_name }))}
+          />
+          <Select
+            placeholder="Trạng thái"
+            value={statusFilter}
+            onChange={(value) => { setStatusFilter(value); setPage(1) }}
+            allowClear
+            options={[
+              { value: 'active', label: 'Hoạt động' },
+              { value: 'inactive', label: 'Khóa' },
+            ]}
+          />
+        </div>
+      </Card>
+
       <Card style={{ boxShadow: '0 1px 6px rgba(0,0,0,0.05)' }}>
         <Table
-          dataSource={users || []}
+          dataSource={data?.data || []}
           columns={columns}
           rowKey="user_id"
           loading={isLoading}
           scroll={{ x: 700 }}
-          pagination={{ pageSize: 10, showTotal: (t) => `Tổng ${t} người dùng` }}
+          pagination={{
+            current: page,
+            pageSize: 10,
+            total: data?.total || 0,
+            showTotal: (t) => `Tổng ${t} người dùng`,
+            onChange: setPage,
+            showSizeChanger: false,
+          }}
         />
       </Card>
 

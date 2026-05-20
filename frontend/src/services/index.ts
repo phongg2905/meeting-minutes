@@ -13,7 +13,7 @@ export const authService = {
 }
 
 export const usersService = {
-  getAll: () => api.get('/users').then(r => r.data),
+  getAll: (params?: any) => api.get('/users', { params }).then(r => r.data),
   getOne: (id: number) => api.get(`/users/${id}`).then(r => r.data),
   create: (data: any) => api.post('/users', data).then(r => r.data),
   update: (id: number, data: any) => api.patch(`/users/${id}`, data).then(r => r.data),
@@ -94,7 +94,7 @@ export const minuteAttachmentsService = {
 }
 
 export const activityLogsService = {
-  getAll: () => api.get('/activity-logs').then(r => r.data),
+  getAll: (params?: any) => api.get('/activity-logs', { params }).then(r => r.data),
 }
 
 export const notificationsService = {
@@ -105,14 +105,15 @@ export const notificationsService = {
 }
 
 export const backupLogsService = {
-  getAll: () => api.get('/backup-logs').then(r => r.data),
+  getAll: (params?: any) => api.get('/backup-logs', { params }).then(r => r.data),
   create: (data: any) => api.post('/backup-logs', data).then(r => r.data),
   run: () => api.post('/backup-logs/run').then(r => r.data),
-  restore: (backup_id: number) => api.post('/backup-logs/restore', { backup_id }).then(r => r.data),
+  restore: (backup_id: number, confirmation = 'RESTORE') =>
+    api.post('/backup-logs/restore', { backup_id, confirmation }).then(r => r.data),
 }
 
 export const supportRequestsService = {
-  getAll: () => api.get('/support-requests').then(r => r.data),
+  getAll: (params?: any) => api.get('/support-requests', { params }).then(r => r.data),
   create: (data: any) => api.post('/support-requests', data).then(r => r.data),
   update: (id: number, data: any) => api.patch(`/support-requests/${id}`, data).then(r => r.data),
 }

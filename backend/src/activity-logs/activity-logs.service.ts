@@ -11,11 +11,37 @@ export class ActivityLogsService {
     });
   }
 
-  findAll(query?: any) {
-    return this.prisma.activityLog.findMany({
-      include: { user: { select: { full_name: true, email: true } } },
-      orderBy: { created_at: 'desc' },
-      take: 100,
-    });
+  async findAll(query: any = {}) {
+    const page = Math.max(Number(query.page) || 1, 1);
+    const limit = Math.min(Math.max(Number(query.limit) || 20, 1), 100);
+    const where: any = {};
+    if (query.action_name) where.action_name = query.action_name;
+    if (query.target_table) where.target_table = query.target_table;
+    if (query.search) {
+      where.OR = [
+        { action_detail: { contains: query.search, mode: 'insensitive' } },
+        { action_name: { contains: query.search, mode: 'insensitive' } },
+        { target_table: { contains: query.search, mode: 'insensitive' } },
+        { user: { is: { full_name: { contains: query.search, mode: 'insensitive' } } } },
+        { user: { is: { email: { contains: query.search, mode: 'insensitive' } } } },
+      ];
+    }
+    if (query.date_from || query.date_to) {
+      where.created_at = {};
+      if (query.date_from) where.created_at.gte = new Date(query.date_from);
+      if (query.date_to) where.created_at.lte = new Date(`${query.date_to}T23:59:59.999Z`);
+    }
+
+    const [data, total] = await Promise.all([
+      this.prisma.activityLog.findMany({
+        where,
+        include: { user: { select: { full_name: true, email: true } } },
+        orderBy: { created_at: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      this.prisma.activityLog.count({ where }),
+    ]);
+    return { data, total, page, limit };
   }
 }

@@ -182,7 +182,7 @@ describe('MeetingMinutesService permissions', () => {
       start_time: '08:00',
       end_time: '09:00',
       discussion_content: 'Nội dung',
-    }, 2)).rejects.toThrow('Mã biên bản da ton tai');
+    }, 2)).rejects.toThrow('Mã biên bản đã tồn tại');
   });
 
   it('uses the user-provided minute code after trimming whitespace', async () => {

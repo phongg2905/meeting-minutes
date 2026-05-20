@@ -1,7 +1,8 @@
-import { ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import * as nodemailer from 'nodemailer';
+import { randomInt } from 'crypto';
 import { UsersService } from '../users/users.service';
 import { ActivityLogsService } from '../activity-logs/activity-logs.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -9,6 +10,9 @@ import { RegisterDto } from './dto/register.dto';
 
 @Injectable()
 export class AuthService {
+  private readonly resetRequestAttempts = new Map<string, number[]>();
+  private readonly resetVerifyAttempts = new Map<string, number[]>();
+
   constructor(
     private usersService: UsersService,
     private jwtService: JwtService,
@@ -61,12 +65,21 @@ export class AuthService {
   }
 
   async requestPasswordReset(email: string) {
+    const normalizedEmail = email.toLowerCase();
+    this.assertRateLimit(
+      this.resetRequestAttempts,
+      normalizedEmail,
+      3,
+      15 * 60 * 1000,
+      'Bạn đã yêu cầu mã quá nhiều lần. Vui lòng thử lại sau.',
+    );
+
     const user = await this.usersService.findByEmail(email);
     if (!user) {
       return { message: 'Neu email ton tai, ma xac nhan se duoc gui den hop thu' };
     }
 
-    const code = String(Math.floor(100000 + Math.random() * 900000));
+    const code = String(randomInt(100000, 1000000));
     const codeHash = await bcrypt.hash(code, 10);
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
 
@@ -84,6 +97,15 @@ export class AuthService {
   }
 
   async resetPassword(email: string, code: string, newPassword: string) {
+    const normalizedEmail = email.toLowerCase();
+    this.assertRateLimit(
+      this.resetVerifyAttempts,
+      normalizedEmail,
+      5,
+      15 * 60 * 1000,
+      'Bạn đã nhập mã sai quá nhiều lần. Vui lòng yêu cầu mã mới sau.',
+    );
+
     const user = await this.usersService.findByEmail(email);
     if (!user || !user.password_reset_code_hash || !user.password_reset_expires_at) {
       throw new UnauthorizedException('Mã xác nhận không hợp lệ hoac da het han');
@@ -93,7 +115,7 @@ export class AuthService {
     }
 
     const isMatch = await bcrypt.compare(code, user.password_reset_code_hash);
-    if (!isMatch) throw new UnauthorizedException('Mã xác nhận khong dung');
+    if (!isMatch) throw new UnauthorizedException('Mã xác nhận không đúng');
 
     const hashed = await bcrypt.hash(newPassword, 10);
     await this.prisma.user.update({
@@ -105,6 +127,7 @@ export class AuthService {
       },
     });
     await this.activityLogs.log(user.user_id, 'PASSWORD_RESET', 'users', user.user_id, `Đặt lại mật khẩu: ${user.email}`);
+    this.resetVerifyAttempts.delete(normalizedEmail);
     return { message: 'Đặt lại mật khẩu thành công' };
   }
 
@@ -113,9 +136,9 @@ export class AuthService {
     const isMatch = await bcrypt.compare(oldPassword, user.password_hash);
     if (!isMatch) throw new UnauthorizedException('Mật khẩu cu khong dung');
     const hashed = await bcrypt.hash(newPassword, 10);
-    const updated = await this.usersService.updatePassword(userId, hashed);
+    await this.usersService.updatePassword(userId, hashed);
     await this.activityLogs.log(userId, 'PASSWORD_CHANGE', 'users', userId, `Doi mat khau: ${user.email}`);
-    return updated;
+    return { message: 'Đổi mật khẩu thành công' };
   }
 
   private async sendResetCodeEmail(to: string, fullName: string, code: string) {
@@ -126,6 +149,9 @@ export class AuthService {
     const from = process.env.SMTP_FROM || user;
 
     if (!host || !user || !pass || !from) {
+      if (process.env.NODE_ENV === 'production') {
+        throw new BadRequestException('Chưa cấu hình SMTP để gửi mã đặt lại mật khẩu');
+      }
       console.warn(`[PASSWORD_RESET_CODE] ${to}: ${code}`);
       return;
     }
@@ -143,5 +169,22 @@ export class AuthService {
       subject: 'Ma dat lai mat khau he thong biên bản hop',
       text: `Xin chào ${fullName},\n\nMã đặt lại mật khẩu của bạn là: ${code}\nMã có hiệu lực trong 10 phút.\n\nNếu bạn không yêu cầu, vui lòng bỏ qua email này.`,
     });
+  }
+
+  private assertRateLimit(
+    store: Map<string, number[]>,
+    key: string,
+    maxAttempts: number,
+    windowMs: number,
+    message: string,
+  ) {
+    const now = Date.now();
+    const attempts = (store.get(key) || []).filter((timestamp) => now - timestamp < windowMs);
+    if (attempts.length >= maxAttempts) {
+      store.set(key, attempts);
+      throw new BadRequestException(message);
+    }
+    attempts.push(now);
+    store.set(key, attempts);
   }
 }

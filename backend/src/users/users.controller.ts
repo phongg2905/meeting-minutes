@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Request, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Query, Request, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { UsersService } from './users.service';
 import { JwtAuthGuard, Roles, RolesGuard } from '../auth/jwt-auth.guard';
@@ -15,8 +15,8 @@ export class UsersController {
   @Get()
   @Roles(1)
   @ApiOperation({ summary: 'Danh sách người dùng (Admin)' })
-  findAll() {
-    return this.usersService.findAll();
+  findAll(@Query() query: any) {
+    return this.usersService.findAll(query);
   }
 
   @Get(':id')

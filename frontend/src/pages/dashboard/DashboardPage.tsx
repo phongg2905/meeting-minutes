@@ -23,9 +23,10 @@ export default function DashboardPage() {
 
   const { data: logsData } = useQuery({
     queryKey: ['activity-logs'],
-    queryFn: () => activityLogsService.getAll(),
+    queryFn: () => activityLogsService.getAll({ page: 1, limit: 8 }),
     enabled: isAdmin(user?.role_id),
   })
+  const recentLogs = logsData?.data || []
 
   const minutes: MeetingMinute[] = minutesData?.data || []
   const stats = {
@@ -134,7 +135,7 @@ export default function DashboardPage() {
         {isAdmin(user?.role_id) && (
           <Col xs={24} lg={10}>
             <Card title={<span style={{ fontWeight: 700 }}>Hoat dong gan day</span>} style={{ boxShadow: '0 1px 8px rgba(0,0,0,0.06)' }}>
-              {(logsData || []).slice(0, 8).map((log: any) => (
+              {recentLogs.map((log: any) => (
                 <div key={log.log_id} style={{
                   display: 'flex', gap: 10, alignItems: 'flex-start',
                   padding: '8px 0', borderBottom: '1px solid #f1f5f9',
@@ -156,7 +157,7 @@ export default function DashboardPage() {
                   </div>
                 </div>
               ))}
-              {!logsData?.length && <Empty description="Chưa có hoat dong" />}
+              {!recentLogs.length && <Empty description="Chưa có hoạt động" />}
             </Card>
           </Col>
         )}

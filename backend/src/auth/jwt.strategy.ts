@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { ConfigService } from '@nestjs/config';
@@ -19,8 +19,10 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       where: { user_id: payload.sub },
       include: { role: true },
     });
-    if (!user) return null;
-    const { password_hash, ...result } = user;
+    if (!user || user.status !== 'active') {
+      throw new UnauthorizedException('Tài khoản đã bị vô hiệu hóa');
+    }
+    const { password_hash, password_reset_code_hash, password_reset_expires_at, ...result } = user;
     return result;
   }
 }
