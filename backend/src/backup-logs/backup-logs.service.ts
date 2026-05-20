@@ -1,25 +1,51 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { ActivityLogsService } from '../activity-logs/activity-logs.service';
 import { CreateBackupLogDto } from './dto/create-backup-log.dto';
 import { RestoreBackupDto } from './dto/restore-backup.dto';
 import { promises as fs } from 'fs';
 import { dirname, join } from 'path';
+import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'crypto';
 
 @Injectable()
 export class BackupLogsService {
   private readonly backupDir = join(process.cwd(), 'backups');
+  private readonly backupVersion = 1;
 
   constructor(
     private prisma: PrismaService,
     private activityLogs: ActivityLogsService,
   ) {}
 
-  findAll() {
-    return this.prisma.backupLog.findMany({
-      include: { performer: { select: { full_name: true } } },
-      orderBy: { created_at: 'desc' },
-    });
+  async findAll(query: any = {}) {
+    const page = Math.max(Number(query.page) || 1, 1);
+    const limit = Math.min(Math.max(Number(query.limit) || 10, 1), 100);
+    const where: any = {};
+    if (query.action_type) where.action_type = query.action_type;
+    if (query.search) {
+      where.OR = [
+        { file_name: { contains: query.search, mode: 'insensitive' } },
+        { file_path: { contains: query.search, mode: 'insensitive' } },
+        { performer: { is: { full_name: { contains: query.search, mode: 'insensitive' } } } },
+      ];
+    }
+    if (query.date_from || query.date_to) {
+      where.created_at = {};
+      if (query.date_from) where.created_at.gte = new Date(query.date_from);
+      if (query.date_to) where.created_at.lte = new Date(`${query.date_to}T23:59:59.999Z`);
+    }
+
+    const [data, total] = await Promise.all([
+      this.prisma.backupLog.findMany({
+        where,
+        include: { performer: { select: { full_name: true } } },
+        orderBy: { created_at: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      this.prisma.backupLog.count({ where }),
+    ]);
+    return { data, total, page, limit };
   }
 
   async create(userId: number, data: CreateBackupLogDto) {
@@ -29,6 +55,7 @@ export class BackupLogsService {
   }
 
   async runBackup(userId: number) {
+    this.assertBackupEncryptionReady();
     await fs.mkdir(this.backupDir, { recursive: true });
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     const fileName = `backup-${timestamp}.json`;
@@ -74,6 +101,7 @@ export class BackupLogsService {
     );
 
     const payload = {
+      version: this.backupVersion,
       exported_at: new Date().toISOString(),
       data: {
         roles,
@@ -90,7 +118,7 @@ export class BackupLogsService {
       },
     };
 
-    await fs.writeFile(filePath, JSON.stringify(payload, null, 2), 'utf-8');
+    await fs.writeFile(filePath, JSON.stringify(this.encryptBackupPayload(payload), null, 2), 'utf-8');
 
     const log = await this.prisma.backupLog.create({
       data: {
@@ -105,6 +133,10 @@ export class BackupLogsService {
   }
 
   async restore(userId: number, dto: RestoreBackupDto) {
+    if (dto.confirmation !== 'RESTORE') {
+      throw new BadRequestException('Vui lòng nhập RESTORE để xác nhận khôi phục dữ liệu');
+    }
+
     const backup = await this.prisma.backupLog.findUnique({
       where: { backup_id: dto.backup_id },
     });
@@ -113,7 +145,8 @@ export class BackupLogsService {
     }
 
     const raw = await fs.readFile(backup.file_path, 'utf-8');
-    const parsed = JSON.parse(raw);
+    const parsed = this.decryptBackupPayload(JSON.parse(raw));
+    this.validateBackupPayload(parsed);
     const data = parsed.data;
 
     await this.prisma.$transaction(async (tx) => {
@@ -218,6 +251,79 @@ export class BackupLogsService {
     });
     await this.activityLogs.log(userId, 'RESTORE', 'backup_logs', restoreLog.backup_id, `Khôi phục từ backup: ${backup.file_name}`);
     return restoreLog;
+  }
+
+  private assertBackupEncryptionReady() {
+    if (process.env.NODE_ENV === 'production' && !process.env.BACKUP_ENCRYPTION_KEY) {
+      throw new BadRequestException('Chưa cấu hình BACKUP_ENCRYPTION_KEY để mã hóa backup');
+    }
+  }
+
+  private encryptBackupPayload(payload: unknown) {
+    const key = this.getBackupEncryptionKey();
+    if (!key) return payload;
+
+    const iv = randomBytes(12);
+    const cipher = createCipheriv('aes-256-gcm', key, iv);
+    const encrypted = Buffer.concat([
+      cipher.update(JSON.stringify(payload), 'utf8'),
+      cipher.final(),
+    ]);
+
+    return {
+      encrypted: true,
+      algorithm: 'aes-256-gcm',
+      iv: iv.toString('base64'),
+      tag: cipher.getAuthTag().toString('base64'),
+      data: encrypted.toString('base64'),
+    };
+  }
+
+  private decryptBackupPayload(payload: any) {
+    if (!payload?.encrypted) return payload;
+    const key = this.getBackupEncryptionKey();
+    if (!key) {
+      throw new BadRequestException('Backup đã được mã hóa nhưng chưa cấu hình BACKUP_ENCRYPTION_KEY');
+    }
+
+    const decipher = createDecipheriv('aes-256-gcm', key, Buffer.from(payload.iv, 'base64'));
+    decipher.setAuthTag(Buffer.from(payload.tag, 'base64'));
+    const decrypted = Buffer.concat([
+      decipher.update(Buffer.from(payload.data, 'base64')),
+      decipher.final(),
+    ]);
+    return JSON.parse(decrypted.toString('utf8'));
+  }
+
+  private getBackupEncryptionKey() {
+    const rawKey = process.env.BACKUP_ENCRYPTION_KEY;
+    if (!rawKey) return null;
+    return createHash('sha256').update(rawKey).digest();
+  }
+
+  private validateBackupPayload(payload: any) {
+    if (!payload || payload.version !== this.backupVersion || !payload.data) {
+      throw new BadRequestException('File backup không hợp lệ hoặc không đúng phiên bản');
+    }
+
+    const requiredArrays = [
+      'roles',
+      'minuteTypes',
+      'users',
+      'meetingMinutes',
+      'minuteTasks',
+      'minuteParticipants',
+      'minuteAttachments',
+      'supportRequests',
+      'managerRoleRequests',
+      'activityLogs',
+      'backupLogs',
+    ];
+    for (const key of requiredArrays) {
+      if (payload.data[key] !== undefined && !Array.isArray(payload.data[key])) {
+        throw new BadRequestException(`Dữ liệu backup không hợp lệ: ${key}`);
+      }
+    }
   }
 
   private async resetSequences() {

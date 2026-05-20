@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Request, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Post, Query, Request, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { BackupLogsService } from './backup-logs.service';
 import { JwtAuthGuard, Roles, RolesGuard } from '../auth/jwt-auth.guard';
@@ -14,8 +14,8 @@ export class BackupLogsController {
   constructor(private service: BackupLogsService) {}
 
   @Get()
-  findAll() {
-    return this.service.findAll();
+  findAll(@Query() query: any) {
+    return this.service.findAll(query);
   }
 
   @Post()

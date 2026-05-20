@@ -1,17 +1,30 @@
+import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { backupLogsService } from '../../services'
-import { Button, Card, Popconfirm, Space, Table, Tag, Typography, message } from 'antd'
-import { DatabaseOutlined, ReloadOutlined } from '@ant-design/icons'
+import { Button, Card, DatePicker, Input, Popconfirm, Select, Space, Table, Tag, Typography, message } from 'antd'
+import { DatabaseOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons'
 import { formatDateTime } from '../../utils'
 
 const { Text } = Typography
+const { RangePicker } = DatePicker
 
 export default function BackupLogsPage() {
   const queryClient = useQueryClient()
+  const [page, setPage] = useState(1)
+  const [search, setSearch] = useState('')
+  const [actionType, setActionType] = useState<string>()
+  const [dateRange, setDateRange] = useState<any>(null)
 
-  const { data: logs, isLoading } = useQuery({
-    queryKey: ['backup-logs'],
-    queryFn: backupLogsService.getAll,
+  const { data, isLoading } = useQuery({
+    queryKey: ['backup-logs', { page, search, actionType, dateRange }],
+    queryFn: () => backupLogsService.getAll({
+      page,
+      limit: 10,
+      search: search || undefined,
+      action_type: actionType,
+      date_from: dateRange?.[0]?.format('YYYY-MM-DD'),
+      date_to: dateRange?.[1]?.format('YYYY-MM-DD'),
+    }),
   })
 
   const runBackupMutation = useMutation({
@@ -108,13 +121,48 @@ export default function BackupLogsPage() {
         </Space>
       </div>
 
+      <Card style={{ marginBottom: 16, boxShadow: '0 1px 6px rgba(0,0,0,0.05)' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
+          <Input
+            prefix={<SearchOutlined />}
+            placeholder="Tìm tệp, đường dẫn, người thực hiện..."
+            value={search}
+            onChange={(e) => { setSearch(e.target.value); setPage(1) }}
+            allowClear
+          />
+          <Select
+            placeholder="Loại thao tác"
+            value={actionType}
+            onChange={(value) => { setActionType(value); setPage(1) }}
+            allowClear
+            options={[
+              { value: 'backup', label: 'backup' },
+              { value: 'restore', label: 'restore' },
+            ]}
+          />
+          <RangePicker
+            style={{ width: '100%' }}
+            format="DD/MM/YYYY"
+            value={dateRange}
+            onChange={(value) => { setDateRange(value); setPage(1) }}
+          />
+        </div>
+      </Card>
+
       <Card style={{ boxShadow: '0 1px 6px rgba(0,0,0,0.05)' }}>
         <Table
-          dataSource={logs || []}
+          dataSource={data?.data || []}
           columns={columns}
           rowKey="backup_id"
           loading={isLoading}
-          pagination={{ pageSize: 10 }}
+          pagination={{
+            current: page,
+            pageSize: 10,
+            total: data?.total || 0,
+            showTotal: (t) => `Tổng ${t} bản ghi`,
+            onChange: setPage,
+            showSizeChanger: false,
+          }}
           scroll={{ x: 900 }}
         />
       </Card>

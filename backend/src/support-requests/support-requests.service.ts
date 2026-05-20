@@ -14,16 +14,42 @@ export class SupportRequestsService {
     private notifications: NotificationsService,
   ) {}
 
-  findAll(userId: number, roleId: number) {
-    const where = isSystemAdmin(roleId) ? {} : { requested_by: userId };
-    return this.prisma.supportRequest.findMany({
-      where,
-      include: {
-        requester: { select: { user_id: true, full_name: true, email: true } },
-        handler: { select: { user_id: true, full_name: true, email: true } },
-      },
-      orderBy: { created_at: 'desc' },
-    });
+  async findAll(userId: number, roleId: number, query: any = {}) {
+    const page = Math.max(Number(query.page) || 1, 1);
+    const limit = Math.min(Math.max(Number(query.limit) || 10, 1), 100);
+    const where: any = isSystemAdmin(roleId) ? {} : { requested_by: userId };
+    if (query.status) where.status = query.status;
+    if (query.search) {
+      where.OR = [
+        { title: { contains: query.search, mode: 'insensitive' } },
+        { content: { contains: query.search, mode: 'insensitive' } },
+        { response: { contains: query.search, mode: 'insensitive' } },
+        ...(isSystemAdmin(roleId) ? [
+          { requester: { is: { full_name: { contains: query.search, mode: 'insensitive' } } } },
+          { requester: { is: { email: { contains: query.search, mode: 'insensitive' } } } },
+        ] : []),
+      ];
+    }
+    if (query.date_from || query.date_to) {
+      where.created_at = {};
+      if (query.date_from) where.created_at.gte = new Date(query.date_from);
+      if (query.date_to) where.created_at.lte = new Date(`${query.date_to}T23:59:59.999Z`);
+    }
+
+    const [data, total] = await Promise.all([
+      this.prisma.supportRequest.findMany({
+        where,
+        include: {
+          requester: { select: { user_id: true, full_name: true, email: true } },
+          handler: { select: { user_id: true, full_name: true, email: true } },
+        },
+        orderBy: { created_at: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      this.prisma.supportRequest.count({ where }),
+    ]);
+    return { data, total, page, limit };
   }
 
   async findOne(id: number, userId: number, roleId: number) {

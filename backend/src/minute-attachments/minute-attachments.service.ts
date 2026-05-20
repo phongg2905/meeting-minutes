@@ -1,7 +1,8 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { promises as fs } from 'fs';
-import { join } from 'path';
+import { extname, join } from 'path';
+import { randomUUID } from 'crypto';
 import { ActivityLogsService } from '../activity-logs/activity-logs.service';
 import { canManageMinute, canWriteMinutes, isPublicMinute, isSystemAdmin } from '../auth/roles.constants';
 
@@ -18,6 +19,16 @@ export class MinuteAttachmentsService {
     'image/jpeg',
     'image/png',
     'text/plain',
+  ]);
+  private readonly allowedExtensionsByMime = new Map<string, string[]>([
+    ['application/pdf', ['.pdf']],
+    ['application/msword', ['.doc']],
+    ['application/vnd.openxmlformats-officedocument.wordprocessingml.document', ['.docx']],
+    ['application/vnd.ms-excel', ['.xls']],
+    ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', ['.xlsx']],
+    ['image/jpeg', ['.jpg', '.jpeg']],
+    ['image/png', ['.png']],
+    ['text/plain', ['.txt']],
   ]);
 
   constructor(
@@ -40,7 +51,12 @@ export class MinuteAttachmentsService {
     await this.assertMinuteWriteAccess(minuteId, uploadedBy, roleId);
     await fs.mkdir(this.uploadDir, { recursive: true });
 
-    const safeName = `${Date.now()}-${file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+    const extension = extname(file.originalname).toLowerCase();
+    const safeBaseName = file.originalname
+      .replace(extension, '')
+      .replace(/[^a-zA-Z0-9._-]/g, '_')
+      .slice(0, 80);
+    const safeName = `${Date.now()}-${randomUUID()}-${safeBaseName}${extension}`;
     const fullPath = join(this.uploadDir, safeName);
     await fs.writeFile(fullPath, file.buffer);
 
@@ -55,7 +71,7 @@ export class MinuteAttachmentsService {
       include: { uploader: { select: { full_name: true } } },
     });
 
-    await this.activityLogs.log(uploadedBy, 'UPLOAD', 'minute_attachments', attachment.attachment_id, `Tai len tep: ${file.originalname}`);
+    await this.activityLogs.log(uploadedBy, 'UPLOAD', 'minute_attachments', attachment.attachment_id, `Tải lên tệp: ${file.originalname}`);
     return attachment;
   }
 
@@ -66,7 +82,7 @@ export class MinuteAttachmentsService {
     });
     if (!attachment) throw new NotFoundException('Không tìm thấy tệp đính kèm');
     await this.assertMinuteAccess(attachment.minute_id, userId, roleId);
-    await this.activityLogs.log(userId, 'DOWNLOAD', 'minute_attachments', id, `Tai xuong tep: ${attachment.file_name}`);
+    await this.activityLogs.log(userId, 'DOWNLOAD', 'minute_attachments', id, `Tải xuống tệp: ${attachment.file_name}`);
     return attachment;
   }
 
@@ -85,8 +101,8 @@ export class MinuteAttachmentsService {
     } catch {
       // File may already be gone; DB record has still been cleaned up.
     }
-    await this.activityLogs.log(userId, 'DELETE', 'minute_attachments', id, `Xóa tep: ${attachment.file_name}`);
-    return { message: 'Xóa tep dinh kem thanh cong' };
+    await this.activityLogs.log(userId, 'DELETE', 'minute_attachments', id, `Xóa tệp: ${attachment.file_name}`);
+    return { message: 'Xóa tệp đính kèm thành công' };
   }
 
   private async assertMinuteAccess(minuteId: number, userId: number, roleId: number) {
@@ -95,7 +111,7 @@ export class MinuteAttachmentsService {
     });
     if (!minute) throw new NotFoundException('Không tìm thấy biên bản');
     if (!isSystemAdmin(roleId) && minute.created_by !== userId && !(minute.status === 'completed' && isPublicMinute(minute))) {
-      throw new ForbiddenException('Ban khong co quyen truy cap tep cua biên bản nay');
+      throw new ForbiddenException('Bạn không có quyền truy cập tệp của biên bản này');
     }
     return minute;
   }
@@ -103,16 +119,49 @@ export class MinuteAttachmentsService {
   private async assertMinuteWriteAccess(minuteId: number, userId: number, roleId: number) {
     const minute = await this.assertMinuteAccess(minuteId, userId, roleId);
     if (!canManageMinute(roleId, userId, minute.created_by)) {
-      throw new ForbiddenException('Ban khong co quyen thay doi tep cua biên bản nay');
+      throw new ForbiddenException('Bạn không có quyền thay đổi tệp của biên bản này');
     }
     return minute;
   }
 
   private validateFile(file: any) {
     if (!file) throw new BadRequestException('Chưa chọn tệp đính kèm');
-    if (file.size > this.maxFileSize) throw new BadRequestException('Tệp đính kèm khong duoc vuot qua 10MB');
+    if (file.size > this.maxFileSize) throw new BadRequestException('Tệp đính kèm không được vượt quá 10MB');
     if (!this.allowedMimeTypes.has(file.mimetype)) {
       throw new BadRequestException('Định dạng tệp không được hỗ trợ');
     }
+    const extension = extname(file.originalname || '').toLowerCase();
+    const allowedExtensions = this.allowedExtensionsByMime.get(file.mimetype) || [];
+    if (!allowedExtensions.includes(extension)) {
+      throw new BadRequestException('Phần mở rộng tệp không khớp định dạng được phép');
+    }
+    if (!Buffer.isBuffer(file.buffer) || file.buffer.length === 0) {
+      throw new BadRequestException('Tệp đính kèm không hợp lệ');
+    }
+    if (!this.hasValidSignature(file.mimetype, file.buffer)) {
+      throw new BadRequestException('Nội dung tệp không khớp định dạng được phép');
+    }
+  }
+
+  private hasValidSignature(mimetype: string, buffer: Buffer) {
+    const startsWith = (signature: number[]) =>
+      signature.every((byte, index) => buffer[index] === byte);
+
+    if (mimetype === 'application/pdf') return startsWith([0x25, 0x50, 0x44, 0x46]);
+    if (mimetype === 'image/png') return startsWith([0x89, 0x50, 0x4e, 0x47]);
+    if (mimetype === 'image/jpeg') return startsWith([0xff, 0xd8, 0xff]);
+    if (
+      mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+      mimetype === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    ) {
+      return startsWith([0x50, 0x4b, 0x03, 0x04]) || startsWith([0x50, 0x4b, 0x05, 0x06]) || startsWith([0x50, 0x4b, 0x07, 0x08]);
+    }
+    if (mimetype === 'application/msword' || mimetype === 'application/vnd.ms-excel') {
+      return startsWith([0xd0, 0xcf, 0x11, 0xe0]);
+    }
+    if (mimetype === 'text/plain') {
+      return !buffer.includes(0);
+    }
+    return false;
   }
 }

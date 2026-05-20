@@ -1,4 +1,4 @@
-import { Controller, Get, UseGuards } from '@nestjs/common';
+import { Controller, Get, Query, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { ActivityLogsService } from './activity-logs.service';
 import { JwtAuthGuard, RolesGuard, Roles } from '../auth/jwt-auth.guard';
@@ -11,5 +11,5 @@ import { JwtAuthGuard, RolesGuard, Roles } from '../auth/jwt-auth.guard';
 export class ActivityLogsController {
   constructor(private service: ActivityLogsService) {}
   @Get()
-  findAll() { return this.service.findAll(); }
+  findAll(@Query() query: any) { return this.service.findAll(query); }
 }

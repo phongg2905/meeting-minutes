@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, ParseIntPipe, Patch, Post, Request, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseIntPipe, Patch, Post, Query, Request, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { SupportRequestsService } from './support-requests.service';
@@ -13,8 +13,8 @@ export class SupportRequestsController {
   constructor(private service: SupportRequestsService) {}
 
   @Get()
-  findAll(@Request() req) {
-    return this.service.findAll(req.user.user_id, req.user.role_id);
+  findAll(@Request() req, @Query() query: any) {
+    return this.service.findAll(req.user.user_id, req.user.role_id, query);
   }
 
   @Get(':id')

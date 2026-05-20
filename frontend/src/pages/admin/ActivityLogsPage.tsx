@@ -1,10 +1,12 @@
-import { Table, Card, Tag, Typography, Avatar } from 'antd'
-import { AuditOutlined } from '@ant-design/icons'
+import { useState } from 'react'
+import { Table, Card, Tag, Typography, Avatar, Row, Col, Input, Select, DatePicker } from 'antd'
+import { AuditOutlined, SearchOutlined } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
 import { activityLogsService } from '../../services'
 import { formatDateTime } from '../../utils'
 
 const { Text } = Typography
+const { RangePicker } = DatePicker
 
 const ACTION_COLORS: Record<string, string> = {
   CREATE: 'success',
@@ -15,9 +17,23 @@ const ACTION_COLORS: Record<string, string> = {
 }
 
 export default function ActivityLogsPage() {
-  const { data: logs, isLoading } = useQuery({
-    queryKey: ['activity-logs'],
-    queryFn: activityLogsService.getAll,
+  const [page, setPage] = useState(1)
+  const [search, setSearch] = useState('')
+  const [actionName, setActionName] = useState<string>()
+  const [targetTable, setTargetTable] = useState<string>()
+  const [dateRange, setDateRange] = useState<any>(null)
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['activity-logs', { page, search, actionName, targetTable, dateRange }],
+    queryFn: () => activityLogsService.getAll({
+      page,
+      limit: 20,
+      search: search || undefined,
+      action_name: actionName,
+      target_table: targetTable,
+      date_from: dateRange?.[0]?.format('YYYY-MM-DD'),
+      date_to: dateRange?.[1]?.format('YYYY-MM-DD'),
+    }),
     refetchInterval: 30000,
   })
 
@@ -84,20 +100,67 @@ export default function ActivityLogsPage() {
           <div>
             <h1 className="page-title" style={{ marginBottom: 0 }}>Nhật ký hoạt động</h1>
             <p style={{ margin: 0, fontSize: 13, color: '#64748b' }}>
-              Theo dõi toàn bộ thao tác trong hệ thống (100 gần nhất)
+              Theo dõi thao tác trong hệ thống
             </p>
           </div>
         </div>
       </div>
 
+      <Card style={{ marginBottom: 16, boxShadow: '0 1px 6px rgba(0,0,0,0.05)' }}>
+        <Row gutter={[12, 12]}>
+          <Col xs={24} md={8}>
+            <Input
+              prefix={<SearchOutlined />}
+              placeholder="Tìm người dùng, hành động, chi tiết..."
+              value={search}
+              onChange={(e) => { setSearch(e.target.value); setPage(1) }}
+              allowClear
+            />
+          </Col>
+          <Col xs={24} md={5}>
+            <Select
+              placeholder="Hành động"
+              value={actionName}
+              onChange={(value) => { setActionName(value); setPage(1) }}
+              allowClear
+              style={{ width: '100%' }}
+              options={Object.keys(ACTION_COLORS).map((value) => ({ value, label: value }))}
+            />
+          </Col>
+          <Col xs={24} md={5}>
+            <Input
+              placeholder="Bảng dữ liệu"
+              value={targetTable}
+              onChange={(e) => { setTargetTable(e.target.value || undefined); setPage(1) }}
+              allowClear
+            />
+          </Col>
+          <Col xs={24} md={6}>
+            <RangePicker
+              style={{ width: '100%' }}
+              format="DD/MM/YYYY"
+              value={dateRange}
+              onChange={(value) => { setDateRange(value); setPage(1) }}
+            />
+          </Col>
+        </Row>
+      </Card>
+
       <Card style={{ boxShadow: '0 1px 6px rgba(0,0,0,0.05)' }}>
         <Table
-          dataSource={logs || []}
+          dataSource={data?.data || []}
           columns={columns}
           rowKey="log_id"
           loading={isLoading}
           scroll={{ x: 700 }}
-          pagination={{ pageSize: 20, showTotal: (t) => `Tổng ${t} bản ghi` }}
+          pagination={{
+            current: page,
+            pageSize: 20,
+            total: data?.total || 0,
+            showTotal: (t) => `Tổng ${t} bản ghi`,
+            onChange: setPage,
+            showSizeChanger: false,
+          }}
         />
       </Card>
     </div>

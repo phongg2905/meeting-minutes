@@ -12,7 +12,39 @@ export class UsersService {
     private activityLogs: ActivityLogsService,
   ) {}
 
-  async findAll() {
+  async findAll(query: any = {}) {
+    const page = Math.max(Number(query.page) || 1, 1);
+    const limit = Math.min(Math.max(Number(query.limit) || 10, 1), 100);
+    const where: any = {};
+    if (query.search) {
+      where.OR = [
+        { full_name: { contains: query.search, mode: 'insensitive' } },
+        { email: { contains: query.search, mode: 'insensitive' } },
+        { phone: { contains: query.search, mode: 'insensitive' } },
+      ];
+    }
+    if (query.role_id) where.role_id = Number(query.role_id);
+    if (query.status) where.status = query.status;
+
+    const [users, total] = await Promise.all([
+      this.prisma.user.findMany({
+        where,
+        include: { role: true },
+        orderBy: { created_at: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      this.prisma.user.count({ where }),
+    ]);
+    return {
+      data: users.map(({ password_hash, ...user }) => user),
+      total,
+      page,
+      limit,
+    };
+  }
+
+  async findAllLegacy() {
     const users = await this.prisma.user.findMany({
       include: { role: true },
       orderBy: { created_at: 'desc' },
