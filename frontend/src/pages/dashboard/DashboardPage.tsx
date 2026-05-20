@@ -134,7 +134,7 @@ export default function DashboardPage() {
 
         {isAdmin(user?.role_id) && (
           <Col xs={24} lg={10}>
-            <Card title={<span style={{ fontWeight: 700 }}>Hoat dong gan day</span>} style={{ boxShadow: '0 1px 8px rgba(0,0,0,0.06)' }}>
+            <Card title={<span style={{ fontWeight: 700 }}>Hoạt động gần đây</span>} style={{ boxShadow: '0 1px 8px rgba(0,0,0,0.06)' }}>
               {recentLogs.map((log: any) => (
                 <div key={log.log_id} style={{
                   display: 'flex', gap: 10, alignItems: 'flex-start',
