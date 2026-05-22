@@ -67,6 +67,7 @@ export interface MeetingMinute {
   discussion_content: string
   conclusion_content?: string
   followup_summary?: string
+  template_data?: Record<string, any>
   status: string
   reviewed_by?: number
   reviewed_at?: string

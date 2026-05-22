@@ -70,6 +70,7 @@ model MeetingMinute {
   discussion_content String
   conclusion_content String?
   followup_summary   String?
+  template_data      Json?
   status             String              @default("draft") @db.VarChar(20)
   reviewed_by        Int?
   reviewed_at        DateTime?

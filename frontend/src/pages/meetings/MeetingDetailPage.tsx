@@ -3,10 +3,12 @@ import {
 } from 'antd'
 import {
   HomeOutlined, EditOutlined, DeleteOutlined, ArrowLeftOutlined,
-  UserOutlined, CheckSquareOutlined, PaperClipOutlined, InfoCircleOutlined, PrinterOutlined, UploadOutlined, DownloadOutlined
+  UserOutlined, CheckSquareOutlined, PaperClipOutlined, InfoCircleOutlined, PrinterOutlined, UploadOutlined, DownloadOutlined,
+  FileTextOutlined
 } from '@ant-design/icons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useParams } from 'react-router-dom'
+import type React from 'react'
 import { meetingMinutesService, minuteAttachmentsService } from '../../services'
 import { useAuthStore } from '../../store/authStore'
 import {
@@ -17,6 +19,7 @@ import {
 } from '../../utils'
 import { useRef } from 'react'
 import { exportElementToPdf } from '../../utils/exportPdf'
+import MinuteDocumentPreview from '../../components/meeting/MinuteDocumentPreview'
 
 const { Title, Text, Paragraph } = Typography
 
@@ -72,15 +75,15 @@ export default function MeetingDetailPage() {
 
   const participantColumns = [
     { title: '#', key: 'index', width: 50, render: (_: any, __: any, i: number) => i + 1 },
-    { title: 'Họ và tên', dataIndex: 'full_name', key: 'full_name', render: (n: string) => <Text strong>{n}</Text> },
-    { title: 'Vai trò', dataIndex: 'role_in_meeting', key: 'role_in_meeting', render: (r: string) => r || '—' },
+    { title: 'Họ và tên', dataIndex: 'full_name', key: 'full_name', render: (name: string) => <Text strong>{name}</Text> },
+    { title: 'Vai trò', dataIndex: 'role_in_meeting', key: 'role_in_meeting', render: (role: string) => role || '—' },
     {
       title: 'Tình trạng',
       dataIndex: 'attendance_status',
       key: 'attendance_status',
-      render: (s: string) => {
+      render: (status: string) => {
         const colors: Record<string, string> = { present: 'success', absent: 'error', late: 'warning' }
-        return <Tag color={colors[s] || 'default'}>{ATTENDANCE_LABELS[s] || s}</Tag>
+        return <Tag color={colors[status] || 'default'}>{ATTENDANCE_LABELS[status] || status}</Tag>
       },
     },
   ]
@@ -88,13 +91,13 @@ export default function MeetingDetailPage() {
   const taskColumns = [
     { title: '#', key: 'index', width: 50, render: (_: any, __: any, i: number) => i + 1 },
     { title: 'Nội dung nhiệm vụ', dataIndex: 'task_content', key: 'task_content' },
-    { title: 'Người phụ trách', dataIndex: 'assigned_to', key: 'assigned_to', render: (v: string) => v || '—' },
-    { title: 'Hạn chót', dataIndex: 'deadline', key: 'deadline', render: (d: string) => formatDate(d) },
+    { title: 'Người phụ trách', dataIndex: 'assigned_to', key: 'assigned_to', render: (value: string) => value || '—' },
+    { title: 'Hạn chót', dataIndex: 'deadline', key: 'deadline', render: (date: string) => formatDate(date) },
     {
       title: 'Trạng thái',
       dataIndex: 'task_status',
       key: 'task_status',
-      render: (s: string) => <Tag color={TASK_STATUS_COLORS[s]}>{TASK_STATUS_LABELS[s] || s}</Tag>,
+      render: (status: string) => <Tag color={TASK_STATUS_COLORS[status]}>{TASK_STATUS_LABELS[status] || status}</Tag>,
     },
   ]
 
@@ -124,7 +127,7 @@ export default function MeetingDetailPage() {
             <Descriptions.Item label="Giờ bắt đầu">{formatTime(minute.start_time)}</Descriptions.Item>
             <Descriptions.Item label="Giờ kết thúc">{formatTime(minute.end_time)}</Descriptions.Item>
             <Descriptions.Item label="Địa điểm">{minute.location || '—'}</Descriptions.Item>
-            <Descriptions.Item label="Hình thức hop">{minute.meeting_form || '—'}</Descriptions.Item>
+            <Descriptions.Item label="Hình thức họp">{minute.meeting_form || '—'}</Descriptions.Item>
             <Descriptions.Item label="Người tạo">{minute.creator?.full_name}</Descriptions.Item>
             <Descriptions.Item label="Chủ tọa">{minute.host_name || '—'}</Descriptions.Item>
             <Descriptions.Item label="Thư ký">{minute.secretary_name || '—'}</Descriptions.Item>
@@ -133,13 +136,13 @@ export default function MeetingDetailPage() {
 
           {minute.attendee_summary && (
             <Card size="small" style={{ marginBottom: 12, borderRadius: 8, background: '#f0fdf4' }}>
-              <Text strong>Thanh phan co mat:</Text>
+              <Text strong>Thành phần có mặt:</Text>
               <Paragraph style={{ margin: '4px 0 0' }}>{minute.attendee_summary}</Paragraph>
             </Card>
           )}
           {minute.absentee_summary && (
             <Card size="small" style={{ marginBottom: 12, borderRadius: 8, background: '#fef9c3' }}>
-              <Text strong>Thanh phan vang mat:</Text>
+              <Text strong>Thành phần vắng mặt:</Text>
               <Paragraph style={{ margin: '4px 0 0' }}>{minute.absentee_summary}</Paragraph>
             </Card>
           )}
@@ -152,21 +155,30 @@ export default function MeetingDetailPage() {
             </div>
           )}
           <div style={{ marginBottom: 16 }}>
-            <Text strong style={{ display: 'block', marginBottom: 6, color: '#0f2644' }}>Nội dung thảo luận:</Text>
+            <Text strong style={{ display: 'block', marginBottom: 6, color: '#0f2644' }}>Nội dung theo mẫu:</Text>
             <Paragraph style={{ background: '#f8fafc', padding: '12px 16px', borderRadius: 8, margin: 0, whiteSpace: 'pre-wrap' }}>{minute.discussion_content}</Paragraph>
           </div>
           {minute.conclusion_content && (
             <div style={{ marginBottom: 16 }}>
-              <Text strong style={{ display: 'block', marginBottom: 6, color: '#0f2644' }}>Kết luận:</Text>
-              <Paragraph style={{ background: '#f0fdf4', padding: '12px 16px', borderRadius: 8, margin: 0 }}>{minute.conclusion_content}</Paragraph>
+              <Text strong style={{ display: 'block', marginBottom: 6, color: '#0f2644' }}>Kết luận / ý kiến góp ý:</Text>
+              <Paragraph style={{ background: '#f0fdf4', padding: '12px 16px', borderRadius: 8, margin: 0, whiteSpace: 'pre-wrap' }}>{minute.conclusion_content}</Paragraph>
             </div>
           )}
           {minute.followup_summary && (
             <div>
-              <Text strong style={{ display: 'block', marginBottom: 6, color: '#0f2644' }}>Theo dõi tiếp:</Text>
-              <Paragraph style={{ background: '#fffbeb', padding: '12px 16px', borderRadius: 8, margin: 0 }}>{minute.followup_summary}</Paragraph>
+              <Text strong style={{ display: 'block', marginBottom: 6, color: '#0f2644' }}>Theo dõi tiếp / kiến nghị:</Text>
+              <Paragraph style={{ background: '#fffbeb', padding: '12px 16px', borderRadius: 8, margin: 0, whiteSpace: 'pre-wrap' }}>{minute.followup_summary}</Paragraph>
             </div>
           )}
+        </div>
+      ),
+    },
+    {
+      key: 'document',
+      label: <span><FileTextOutlined /> Biểu mẫu</span>,
+      children: (
+        <div ref={exportRef}>
+          <MinuteDocumentPreview minute={minute} typeName={minute.minute_type?.type_name} />
         </div>
       ),
     },
@@ -189,7 +201,7 @@ export default function MeetingDetailPage() {
             <div>
               <input ref={fileInputRef} type="file" hidden onChange={handleFileChange} />
               <Button icon={<UploadOutlined />} onClick={() => fileInputRef.current?.click()} loading={uploadAttachmentMutation.isPending}>
-                Tai tep len
+                Tải tệp lên
               </Button>
             </div>
           )}
@@ -205,10 +217,10 @@ export default function MeetingDetailPage() {
                 </div>
                 <Space>
                   <Button icon={<DownloadOutlined />} onClick={() => minuteAttachmentsService.download(att.attachment_id, att.file_name)}>
-                    Tai xuong
+                    Tải xuống
                   </Button>
                   {canEdit && (
-                    <Popconfirm title="Xóa tep dinh kem nay?" onConfirm={() => deleteAttachmentMutation.mutate(att.attachment_id)} okText="Xóa" cancelText="Hủy" okButtonProps={{ danger: true }}>
+                    <Popconfirm title="Xóa tệp đính kèm này?" onConfirm={() => deleteAttachmentMutation.mutate(att.attachment_id)} okText="Xóa" cancelText="Hủy" okButtonProps={{ danger: true }}>
                       <Button danger icon={<DeleteOutlined />} loading={deleteAttachmentMutation.isPending}>
                         Xóa
                       </Button>
@@ -217,14 +229,14 @@ export default function MeetingDetailPage() {
                 </Space>
               </div>
             </Card>
-          )) : <Empty description="Chưa có tep dinh kem" />}
+          )) : <Empty description="Chưa có tệp đính kèm" />}
         </div>
       ),
     },
   ]
 
   return (
-    <div ref={exportRef}>
+    <div>
       <Breadcrumb
         style={{ marginBottom: 16 }}
         items={[
@@ -253,8 +265,8 @@ export default function MeetingDetailPage() {
           </div>
 
           <Space>
-            <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/meetings')}>Quay lai</Button>
-            <Button icon={<PrinterOutlined />} onClick={handleExportPdf}>Xuat PDF</Button>
+            <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/meetings')}>Quay lại</Button>
+            <Button icon={<PrinterOutlined />} onClick={handleExportPdf}>Xuất PDF</Button>
             {canEdit && (
               <>
                 <Button type="primary" icon={<EditOutlined />} onClick={() => navigate(`/meetings/${id}/edit`)}>Chỉnh sửa</Button>
@@ -275,7 +287,7 @@ export default function MeetingDetailPage() {
       </Card>
 
       <Card style={{ borderRadius: 12, boxShadow: '0 1px 8px rgba(0,0,0,0.06)' }}>
-        <Tabs items={tabItems} defaultActiveKey="info" />
+        <Tabs items={tabItems} defaultActiveKey="document" />
       </Card>
     </div>
   )

@@ -1,4 +1,5 @@
-import { IsArray, IsBoolean, IsDateString, IsInt, IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
+import { Type } from 'class-transformer';
+import { IsArray, IsBoolean, IsDateString, IsInt, IsNotEmpty, IsObject, IsOptional, IsString, MaxLength, ValidateNested } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class CreateParticipantDto {
@@ -32,11 +33,12 @@ export class CreateMeetingMinuteDto {
   @ApiProperty() @IsString() discussion_content: string;
   @ApiProperty({ required: false }) @IsOptional() @IsString() conclusion_content?: string;
   @ApiProperty({ required: false }) @IsOptional() @IsString() followup_summary?: string;
+  @ApiProperty({ required: false }) @IsOptional() @IsObject() template_data?: Record<string, unknown>;
   @ApiProperty({ required: false, default: 'draft' }) @IsOptional() @IsString() status?: string;
   @ApiProperty({ required: false, default: false }) @IsOptional() @IsBoolean() is_public?: boolean;
   @ApiProperty({ required: false }) @IsOptional() @IsString() review_note?: string;
   @ApiProperty({ required: false, type: [CreateParticipantDto] })
-  @IsOptional() @IsArray() participants?: CreateParticipantDto[];
+  @IsOptional() @IsArray() @ValidateNested({ each: true }) @Type(() => CreateParticipantDto) participants?: CreateParticipantDto[];
   @ApiProperty({ required: false, type: [CreateTaskDto] })
-  @IsOptional() @IsArray() tasks?: CreateTaskDto[];
+  @IsOptional() @IsArray() @ValidateNested({ each: true }) @Type(() => CreateTaskDto) tasks?: CreateTaskDto[];
 }

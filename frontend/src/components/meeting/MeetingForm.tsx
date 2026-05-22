@@ -1,16 +1,38 @@
-import { useEffect } from 'react'
+import { useEffect, useMemo } from 'react'
 import {
-  Form, Input, Select, DatePicker, TimePicker, Button, Card,
-  Row, Col, Divider, Typography, Table, Popconfirm
+  Alert,
+  Button,
+  Card,
+  Col,
+  DatePicker,
+  Divider,
+  Form,
+  Input,
+  Popconfirm,
+  Row,
+  Select,
+  Space,
+  Table,
+  TimePicker,
+  Typography,
 } from 'antd'
-import { PlusOutlined, DeleteOutlined } from '@ant-design/icons'
+import { DeleteOutlined, FileTextOutlined, PlusOutlined } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
 import dayjs from 'dayjs'
 import { minuteTypesService } from '../../services'
-import { MinuteType, MeetingMinute } from '../../types'
+import { MeetingMinute, MinuteType } from '../../types'
+import {
+  buildDefaultMinuteCode,
+  buildStructuredMinuteContent,
+  getMinuteTemplate,
+  getMinuteTypeName,
+  getStructuredTemplateDefaults,
+} from '../../utils/minuteTemplates'
+import MinuteDocumentPreview from './MinuteDocumentPreview'
+import StructuredMinuteFields from './StructuredMinuteFields'
 
 const { TextArea } = Input
-const { Title } = Typography
+const { Text, Title } = Typography
 
 interface Props {
   initialValues?: MeetingMinute
@@ -19,21 +41,54 @@ interface Props {
   mode?: 'create' | 'edit'
 }
 
+function normalizeTemplateData(templateData?: Record<string, any>) {
+  if (!templateData) return {}
+
+  if (Array.isArray(templateData.teachers) && templateData.teachers.filter(Boolean).length) {
+    return {
+      ...templateData,
+      teachers: templateData.teachers.map((teacher) => (
+        typeof teacher === 'string'
+          ? { full_name: teacher }
+          : teacher
+      )),
+    }
+  }
+
+  if (templateData.teacher_name) {
+    return {
+      ...templateData,
+      teachers: [{ full_name: templateData.teacher_name }],
+    }
+  }
+
+  return templateData
+}
+
 export default function MeetingForm({ initialValues, onSubmit, loading, mode = 'create' }: Props) {
   const [form] = Form.useForm()
+  const selectedTypeId = Form.useWatch('type_id', form)
+  const formValues = Form.useWatch([], form)
 
   const { data: types } = useQuery({
     queryKey: ['minute-types'],
     queryFn: minuteTypesService.getAll,
   })
 
+  const selectedTypeName = useMemo(() => {
+    const fromApi = (types || []).find((type: MinuteType) => type.type_id === selectedTypeId)?.type_name
+    return getMinuteTypeName(selectedTypeId, fromApi)
+  }, [selectedTypeId, types])
+
   useEffect(() => {
     if (!initialValues) return
+
     form.setFieldsValue({
       ...initialValues,
       meeting_date: initialValues.meeting_date ? dayjs(initialValues.meeting_date) : null,
       start_time: initialValues.start_time ? dayjs(initialValues.start_time) : null,
       end_time: initialValues.end_time ? dayjs(initialValues.end_time) : null,
+      template_data: normalizeTemplateData(initialValues.template_data),
       tasks: initialValues.tasks?.map((task) => ({
         ...task,
         deadline: task.deadline ? dayjs(task.deadline).format('YYYY-MM-DD') : undefined,
@@ -41,13 +96,45 @@ export default function MeetingForm({ initialValues, onSubmit, loading, mode = '
     })
   }, [initialValues, form])
 
+  const applyTemplate = (typeId = selectedTypeId, overwrite = true) => {
+    const template = getMinuteTemplate(typeId)
+    if (!template) return
+
+    const current = form.getFieldsValue()
+    form.setFieldsValue({
+      minute_code: current.minute_code || buildDefaultMinuteCode(typeId),
+      title: overwrite || !current.title ? template.title : current.title,
+      purpose: overwrite || !current.purpose ? template.purpose : current.purpose,
+      template_data: overwrite || !current.template_data ? getStructuredTemplateDefaults(typeId) : current.template_data,
+    })
+  }
+
+  const handleTypeChange = (typeId: number) => {
+    const template = getMinuteTemplate(typeId)
+
+    form.setFieldsValue({
+      type_id: typeId,
+      title: template?.title,
+      purpose: template?.purpose,
+      template_data: getStructuredTemplateDefaults(typeId),
+      discussion_content: undefined,
+      conclusion_content: undefined,
+      followup_summary: undefined,
+    })
+  }
+
   const handleFinish = (values: any) => {
+    const structuredContent = buildStructuredMinuteContent(values.type_id, values.template_data)
+
     onSubmit({
       ...values,
       minute_code: values.minute_code?.trim(),
       meeting_date: values.meeting_date?.format('YYYY-MM-DD'),
       start_time: values.start_time?.format('HH:mm'),
       end_time: values.end_time?.format('HH:mm'),
+      host_name: values.host_name || values.template_data?.chair_name,
+      secretary_name: values.secretary_name || values.template_data?.secretary_name,
+      discussion_content: structuredContent || values.discussion_content || 'Chưa nhập nội dung',
       participants: values.participants || [],
       tasks: values.tasks || [],
     })
@@ -91,7 +178,7 @@ export default function MeetingForm({ initialValues, onSubmit, loading, mode = '
       key: 'action',
       width: 52,
       render: (_: any, field: any, __: number, remove?: (index: number) => void) => (
-        <Popconfirm title="Xóa nguoi tham du?" onConfirm={() => remove?.(field.name)} okText="Xóa" cancelText="Hủy">
+        <Popconfirm title="Xóa người tham dự?" onConfirm={() => remove?.(field.name)} okText="Xóa" cancelText="Hủy">
           <Button type="text" danger size="small" icon={<DeleteOutlined />} />
         </Popconfirm>
       ),
@@ -152,6 +239,16 @@ export default function MeetingForm({ initialValues, onSubmit, loading, mode = '
       initialValues={{ status: 'draft', meeting_form: 'Trực tiếp' }}
       scrollToFirstError
     >
+      <Form.Item name="discussion_content" hidden>
+        <Input />
+      </Form.Item>
+      <Form.Item name="conclusion_content" hidden>
+        <Input />
+      </Form.Item>
+      <Form.Item name="followup_summary" hidden>
+        <Input />
+      </Form.Item>
+
       <Card style={{ marginBottom: 16, borderRadius: 12 }}>
         <Title level={5} style={{ color: '#0f2644', marginBottom: 20 }}>Thông tin cơ bản</Title>
         <Row gutter={[16, 0]}>
@@ -169,8 +266,26 @@ export default function MeetingForm({ initialValues, onSubmit, loading, mode = '
           </Col>
           <Col xs={24} md={12}>
             <Form.Item label="Loại biên bản" name="type_id" rules={[{ required: true, message: 'Chọn loại biên bản' }]}>
-              <Select placeholder="Chọn loại biên bản" options={(types || []).map((t: MinuteType) => ({ value: t.type_id, label: t.type_name }))} />
+              <Select
+                placeholder="Chọn loại biên bản"
+                onChange={handleTypeChange}
+                options={(types || []).map((type: MinuteType) => ({ value: type.type_id, label: getMinuteTypeName(type.type_id, type.type_name) }))}
+              />
             </Form.Item>
+          </Col>
+          <Col xs={24}>
+            <Alert
+              type="info"
+              showIcon
+              style={{ marginBottom: 16 }}
+              message={selectedTypeName || 'Chọn loại biên bản để nạp đúng mẫu'}
+              description="Sau khi chọn loại, hệ thống hiển thị các trường nhập cố định theo mẫu. Dữ liệu vẫn được tổng hợp thành nội dung biên bản khi lưu."
+              action={selectedTypeId ? (
+                <Button size="small" icon={<FileTextOutlined />} onClick={() => applyTemplate(selectedTypeId, true)}>
+                  Áp dụng lại mẫu
+                </Button>
+              ) : undefined}
+            />
           </Col>
           <Col xs={24} md={12}>
             <Form.Item label="Tên lớp" name="class_name" rules={[{ required: true, message: 'Nhập tên lớp' }]}>
@@ -179,7 +294,7 @@ export default function MeetingForm({ initialValues, onSubmit, loading, mode = '
           </Col>
           <Col xs={24}>
             <Form.Item label="Tiêu đề biên bản" name="title" rules={[{ required: true, message: 'Nhập tiêu đề' }]}>
-              <Input placeholder="VD: Biên bản họp lớp thang 11/2024" />
+              <Input placeholder="VD: Biên bản họp lớp tháng 11/2024" />
             </Form.Item>
           </Col>
           <Col xs={24} md={8}>
@@ -203,7 +318,7 @@ export default function MeetingForm({ initialValues, onSubmit, loading, mode = '
             </Form.Item>
           </Col>
           <Col xs={24} md={12}>
-            <Form.Item label="Hình thức hop" name="meeting_form">
+            <Form.Item label="Hình thức họp" name="meeting_form">
               <Select options={[
                 { value: 'Trực tiếp', label: 'Trực tiếp' },
                 { value: 'Trực tuyến', label: 'Trực tuyến' },
@@ -212,13 +327,13 @@ export default function MeetingForm({ initialValues, onSubmit, loading, mode = '
             </Form.Item>
           </Col>
           <Col xs={24} md={12}>
-            <Form.Item label="Chủ tọa" name="host_name">
-              <Input placeholder="Họ tên chu toa" />
+            <Form.Item label="Chủ tọa / Chủ trì" name="host_name">
+              <Input placeholder="Họ tên chủ tọa" />
             </Form.Item>
           </Col>
           <Col xs={24} md={12}>
             <Form.Item label="Thư ký" name="secretary_name">
-              <Input placeholder="Họ tên thu ky" />
+              <Input placeholder="Họ tên thư ký" />
             </Form.Item>
           </Col>
         </Row>
@@ -229,12 +344,12 @@ export default function MeetingForm({ initialValues, onSubmit, loading, mode = '
         <Row gutter={[16, 0]}>
           <Col xs={24} md={12}>
             <Form.Item label="Tóm tắt thành phần có mặt" name="attendee_summary">
-              <TextArea rows={2} />
+              <TextArea autoSize={{ minRows: 2 }} placeholder="VD: 42 bạn" />
             </Form.Item>
           </Col>
           <Col xs={24} md={12}>
             <Form.Item label="Tóm tắt thành phần vắng mặt" name="absentee_summary">
-              <TextArea rows={2} />
+              <TextArea autoSize={{ minRows: 2 }} placeholder="VD: 2 bạn có phép, 1 bạn không phép" />
             </Form.Item>
           </Col>
         </Row>
@@ -263,17 +378,9 @@ export default function MeetingForm({ initialValues, onSubmit, loading, mode = '
       <Card style={{ marginBottom: 16, borderRadius: 12 }}>
         <Title level={5} style={{ color: '#0f2644', marginBottom: 20 }}>Nội dung cuộc họp</Title>
         <Form.Item label="Mục đích cuộc họp" name="purpose">
-          <TextArea rows={2} />
+          <TextArea autoSize={{ minRows: 2 }} />
         </Form.Item>
-        <Form.Item label="Nội dung thảo luận" name="discussion_content" rules={[{ required: true, message: 'Nhập nội dung thao luan' }]}>
-          <TextArea rows={5} />
-        </Form.Item>
-        <Form.Item label="Kết luận" name="conclusion_content">
-          <TextArea rows={3} />
-        </Form.Item>
-        <Form.Item label="Theo dõi tiếp" name="followup_summary">
-          <TextArea rows={2} />
-        </Form.Item>
+        <StructuredMinuteFields typeId={selectedTypeId} />
       </Card>
 
       <Card style={{ marginBottom: 24, borderRadius: 12 }}>
@@ -290,7 +397,7 @@ export default function MeetingForm({ initialValues, onSubmit, loading, mode = '
                     key: 'action',
                     width: 52,
                     render: (_: any, field: any) => (
-                      <Popconfirm title="Xóa nhiem vu?" onConfirm={() => remove(field.name)} okText="Xóa" cancelText="Hủy">
+                      <Popconfirm title="Xóa nhiệm vụ?" onConfirm={() => remove(field.name)} okText="Xóa" cancelText="Hủy">
                         <Button type="text" danger size="small" icon={<DeleteOutlined />} />
                       </Popconfirm>
                     ),
@@ -308,6 +415,23 @@ export default function MeetingForm({ initialValues, onSubmit, loading, mode = '
             </>
           )}
         </Form.List>
+      </Card>
+
+      <Card style={{ marginBottom: 24, borderRadius: 12 }}>
+        <Space direction="vertical" size={12} style={{ width: '100%' }}>
+          <div>
+            <Title level={5} style={{ color: '#0f2644', marginBottom: 4 }}>Xem trước biểu mẫu</Title>
+            <Text type="secondary">Bản xem trước dùng cùng dữ liệu với phần xuất PDF ở trang chi tiết.</Text>
+          </div>
+          <MinuteDocumentPreview
+            minute={{
+              ...formValues,
+              type_id: selectedTypeId,
+              discussion_content: buildStructuredMinuteContent(selectedTypeId, formValues?.template_data),
+            }}
+            typeName={selectedTypeName}
+          />
+        </Space>
       </Card>
 
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
