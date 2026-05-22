@@ -1,10 +1,10 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Request, Query, ParseIntPipe } from '@nestjs/common';
-import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
-import { MeetingMinutesService } from './meeting-minutes.service';
+import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Query, Request, UseGuards } from '@nestjs/common';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CreateMeetingMinuteDto } from './dto/create-meeting-minute.dto';
-import { UpdateMeetingMinuteDto } from './dto/update-meeting-minute.dto';
+import { MeetingMinutesService } from './meeting-minutes.service';
 import { QueryMeetingMinuteDto } from './dto/query-meeting-minute.dto';
+import { UpdateMeetingMinuteDto } from './dto/update-meeting-minute.dto';
 
 @ApiTags('Meeting Minutes')
 @ApiBearerAuth()
@@ -42,7 +42,7 @@ export class MeetingMinutesController {
   }
 
   @Patch(':id/public')
-  @ApiOperation({ summary: 'Công khai/an biên bản' })
+  @ApiOperation({ summary: 'Công khai/ẩn biên bản' })
   updatePublic(@Param('id', ParseIntPipe) id: number, @Body('is_public') isPublic: boolean, @Request() req) {
     return this.service.updatePublic(id, isPublic, req.user.user_id, req.user.role_id);
   }

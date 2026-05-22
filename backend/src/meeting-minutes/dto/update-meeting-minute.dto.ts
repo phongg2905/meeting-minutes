@@ -1,4 +1,5 @@
-import { IsArray, IsBoolean, IsDateString, IsInt, IsOptional, IsString, MaxLength } from 'class-validator';
+import { Type } from 'class-transformer';
+import { IsArray, IsBoolean, IsDateString, IsInt, IsObject, IsOptional, IsString, MaxLength, ValidateNested } from 'class-validator';
 import { CreateParticipantDto, CreateTaskDto } from './create-meeting-minute.dto';
 
 export class UpdateMeetingMinuteDto {
@@ -19,9 +20,10 @@ export class UpdateMeetingMinuteDto {
   @IsOptional() @IsString() discussion_content?: string;
   @IsOptional() @IsString() conclusion_content?: string;
   @IsOptional() @IsString() followup_summary?: string;
+  @IsOptional() @IsObject() template_data?: Record<string, unknown>;
   @IsOptional() @IsString() status?: string;
   @IsOptional() @IsBoolean() is_public?: boolean;
   @IsOptional() @IsString() review_note?: string;
-  @IsOptional() @IsArray() participants?: CreateParticipantDto[];
-  @IsOptional() @IsArray() tasks?: CreateTaskDto[];
+  @IsOptional() @IsArray() @ValidateNested({ each: true }) @Type(() => CreateParticipantDto) participants?: CreateParticipantDto[];
+  @IsOptional() @IsArray() @ValidateNested({ each: true }) @Type(() => CreateTaskDto) tasks?: CreateTaskDto[];
 }

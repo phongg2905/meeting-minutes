@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+﻿import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ActivityLogsService } from '../activity-logs/activity-logs.service';
@@ -94,7 +94,7 @@ export class MeetingMinutesService {
     const creatorInactive = minute.creator && (minute.creator as any).status === 'inactive';
     if (!isSystemAdmin(roleId) && creatorInactive) throw new NotFoundException('Không tìm thấy biên bản');
     if (!isSystemAdmin(roleId) && minute.created_by !== userId && !this.isVisibleToNonOwner(minute)) {
-      throw new ForbiddenException('Ban khong co quyen xem biên bản nay');
+      throw new ForbiddenException('Bạn không có quyền xem biên bản này');
     }
     return minute;
   }
@@ -108,7 +108,7 @@ export class MeetingMinutesService {
       },
     });
     if (!minute || !this.isVisibleToNonOwner(minute) || (minute.creator as any)?.status !== 'active') {
-      throw new NotFoundException('Không tìm thấy biên bản cong khai');
+      throw new NotFoundException('Không tìm thấy biên bản công khai');
     }
     return this.toPublicSummary(minute);
   }
@@ -119,14 +119,14 @@ export class MeetingMinutesService {
       throw new ForbiddenException('Tài khoản này chỉ được tra cứu');
     }
     const requestedStatus = dto.status || MINUTE_STATUS_DRAFT;
-    if (!this.isValidStatus(requestedStatus)) throw new BadRequestException('Trạng thái biên bản khong hop le');
+    if (!this.isValidStatus(requestedStatus)) throw new BadRequestException('Trạng thái biên bản không hợp lệ');
     if (dto.is_public && requestedStatus !== MINUTE_STATUS_COMPLETED) {
-      throw new BadRequestException('Chi biên bản hoan tat moi duoc cong khai');
+      throw new BadRequestException('Chỉ biên bản hoàn tất mới được công khai');
     }
     if (dto.is_public) this.assertPublicDataIsSafe(dto);
     this.validateMeetingTime(dto.start_time, dto.end_time);
     const minuteCode = this.normalizeMinuteCode(dto.minute_code);
-    if (!minuteCode) throw new BadRequestException('Vui long nhap ma bien ban');
+    if (!minuteCode) throw new BadRequestException('Vui lòng nhập mã biên bản');
 
     let minute;
     try {
@@ -150,6 +150,7 @@ export class MeetingMinutesService {
           discussion_content: dto.discussion_content,
           conclusion_content: dto.conclusion_content,
           followup_summary: dto.followup_summary,
+          template_data: dto.template_data as Prisma.InputJsonValue,
           status: requestedStatus,
           is_public: dto.is_public || false,
           published_at: dto.is_public ? new Date() : undefined,
@@ -162,10 +163,7 @@ export class MeetingMinutesService {
         include: { minute_type: true, participants: true, tasks: true },
       });
     } catch (error) {
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
-        throw new BadRequestException('Mã biên bản đã tồn tại, vui lòng nhập mã khác');
-      }
-      throw error;
+      this.handlePrismaWriteError(error);
     }
     await this.activityLogs.log(userId, 'CREATE', 'meeting_minutes', minute.minute_id, `Tạo biên bản: ${minute.title}`);
     await this.notifications.createForRoles([ROLE_ADMIN], {
@@ -183,11 +181,11 @@ export class MeetingMinutesService {
     if (!canManageMinute(roleId, userId, existing.created_by)) {
       throw new ForbiddenException('Không có quyền chỉnh sửa');
     }
-    if (dto.status && !this.isValidStatus(dto.status)) throw new BadRequestException('Trạng thái biên bản khong hop le');
+    if (dto.status && !this.isValidStatus(dto.status)) throw new BadRequestException('Trạng thái biên bản không hợp lệ');
     const nextStatus = dto.status;
     const nextIsPublic = dto.is_public;
     if ((nextIsPublic ?? existing.is_public) && (nextStatus ?? existing.status) !== MINUTE_STATUS_COMPLETED) {
-      throw new BadRequestException('Chi biên bản hoan tat moi duoc cong khai');
+      throw new BadRequestException('Chỉ biên bản hoàn tất mới được công khai');
     }
     if (nextIsPublic ?? existing.is_public) {
       this.assertPublicDataIsSafe({ ...existing, ...dto });
@@ -205,7 +203,7 @@ export class MeetingMinutesService {
         if (dto.tasks) await tx.minuteTask.deleteMany({ where: { minute_id: id } });
 
         const minuteCode = dto.minute_code === undefined ? undefined : this.normalizeMinuteCode(dto.minute_code);
-        if (minuteCode === '') throw new BadRequestException('Vui long nhap ma bien ban');
+        if (minuteCode === '') throw new BadRequestException('Vui lòng nhập mã biên bản');
 
         return tx.meetingMinute.update({
           where: { minute_id: id },
@@ -227,6 +225,7 @@ export class MeetingMinutesService {
             discussion_content: dto.discussion_content,
             conclusion_content: dto.conclusion_content,
             followup_summary: dto.followup_summary,
+            template_data: dto.template_data as Prisma.InputJsonValue,
             status: nextStatus,
             is_public: nextIsPublic,
             published_at: nextIsPublic ? new Date() : nextIsPublic === false ? null : undefined,
@@ -240,10 +239,7 @@ export class MeetingMinutesService {
         });
       });
     } catch (error) {
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
-        throw new BadRequestException('Mã biên bản đã tồn tại, vui lòng nhập mã khác');
-      }
-      throw error;
+      this.handlePrismaWriteError(error);
     }
 
     await this.activityLogs.log(
@@ -257,14 +253,14 @@ export class MeetingMinutesService {
   }
 
   async updateStatus(id: number, status: string, userId: number, roleId: number, reviewNote?: string) {
-    if (!this.isValidStatus(status)) throw new BadRequestException('Trạng thái biên bản khong hop le');
+    if (!this.isValidStatus(status)) throw new BadRequestException('Trạng thái biên bản không hợp lệ');
     const existing = await this.findOne(id, userId, roleId);
     if (!canManageMinute(roleId, userId, existing.created_by)) {
-      throw new ForbiddenException('Ban chi duoc cap nhat trang thai biên bản do minh tao');
+      throw new ForbiddenException('Bạn chỉ được cập nhật trạng thái biên bản do mình tạo');
     }
     if (existing.is_public) this.assertPublicDataIsSafe(existing);
     if (status === MINUTE_STATUS_DRAFT && existing.is_public) {
-      throw new BadRequestException('Hay tat cong khai truoc khi chuyen biên bản ve dang chinh sua');
+      throw new BadRequestException('Hãy tắt công khai trước khi chuyển biên bản về dạng chỉnh sửa');
     }
 
     const minute = await this.prisma.meetingMinute.update({
@@ -285,10 +281,10 @@ export class MeetingMinutesService {
   async updatePublic(id: number, isPublic: boolean, userId: number, roleId: number) {
     const existing = await this.findOne(id, userId, roleId);
     if (!canManageMinute(roleId, userId, existing.created_by)) {
-      throw new ForbiddenException('Ban chi duoc cong khai/an biên bản do minh tao');
+      throw new ForbiddenException('Bạn chỉ được công khai/ẩn biên bản do mình tạo');
     }
     if (isPublic && existing.status !== MINUTE_STATUS_COMPLETED) {
-      throw new BadRequestException('Chi biên bản hoan tat moi duoc cong khai');
+      throw new BadRequestException('Chỉ biên bản hoàn tất mới được công khai');
     }
     if (isPublic) this.assertPublicDataIsSafe(existing);
 
@@ -377,9 +373,21 @@ export class MeetingMinutesService {
     return code?.trim();
   }
 
+  private handlePrismaWriteError(error: unknown): never {
+    if (error instanceof Prisma.PrismaClientKnownRequestError) {
+      if (error.code === 'P2002') {
+        throw new BadRequestException('Mã biên bản đã tồn tại, vui lòng nhập mã khác');
+      }
+      if (error.code === 'P2003') {
+        throw new BadRequestException('Loại biên bản hoặc dữ liệu liên kết không hợp lệ');
+      }
+    }
+    throw error;
+  }
+
   private validateMeetingTime(startTime?: string, endTime?: string) {
     if (!startTime || !endTime) return;
-    if (startTime >= endTime) throw new BadRequestException('Giờ kết thúc phai sau gio bat dau');
+    if (startTime >= endTime) throw new BadRequestException('Giờ kết thúc phải sau giờ bắt đầu');
   }
 
   private toTimeString(date: Date) {
@@ -428,6 +436,7 @@ export class MeetingMinutesService {
       data.discussion_content,
       data.conclusion_content,
       data.followup_summary,
+      this.stringifyTemplateData(data.template_data),
       ...(data.participants || []).flatMap((item: any) => [item.full_name, item.role_in_meeting]),
       ...(data.tasks || []).flatMap((item: any) => [item.task_content, item.assigned_to]),
     ].filter(Boolean);
@@ -436,4 +445,15 @@ export class MeetingMinutesService {
       throw new BadRequestException('Nội dung biên bản có email hoặc số điện thoại cá nhân. Hãy gỡ bỏ trước khi công khai.');
     }
   }
+
+  private stringifyTemplateData(value: unknown): string {
+    if (!value) return '';
+    if (typeof value === 'string') return value;
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return '';
+    }
+  }
 }
+

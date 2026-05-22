@@ -1,12 +1,9 @@
-import { Card, Typography, Breadcrumb } from 'antd'
+import { Breadcrumb, message } from 'antd'
 import { HomeOutlined, FileAddOutlined } from '@ant-design/icons'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { message } from 'antd'
 import MeetingForm from '../../components/meeting/MeetingForm'
 import { meetingMinutesService } from '../../services'
-
-const { Title } = Typography
 
 export default function MeetingCreatePage() {
   const navigate = useNavigate()

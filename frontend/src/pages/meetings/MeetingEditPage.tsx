@@ -1,16 +1,14 @@
 import { Breadcrumb, Spin, message } from 'antd'
-import { HomeOutlined } from '@ant-design/icons'
+import { HomeOutlined, EditOutlined } from '@ant-design/icons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useParams } from 'react-router-dom'
 import MeetingForm from '../../components/meeting/MeetingForm'
 import { meetingMinutesService } from '../../services'
-import { useAuthStore } from '../../store/authStore'
 
 export default function MeetingEditPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const { user } = useAuthStore()
 
   const { data: minute, isLoading } = useQuery({
     queryKey: ['meeting-minute', id],
@@ -46,7 +44,7 @@ export default function MeetingEditPage() {
       />
       <div className="page-header">
         <div>
-          <h1 className="page-title">✏️ Chỉnh sửa biên bản</h1>
+          <h1 className="page-title"><EditOutlined /> Chỉnh sửa biên bản</h1>
           <p style={{ margin: 0, color: '#64748b', fontSize: 13 }}>
             Mã: <strong>{minute?.minute_code}</strong>
           </p>

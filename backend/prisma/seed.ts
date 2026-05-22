@@ -3,48 +3,38 @@ import * as bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
 
-async function main() {
-  await prisma.role.upsert({
-    where: { role_id: 1 },
-    update: { role_name: 'Admin' },
-    create: { role_id: 1, role_name: 'Admin' },
-  });
-  await prisma.role.upsert({
-    where: { role_id: 2 },
-    update: { role_name: 'Quản lý biên bản' },
-    create: { role_id: 2, role_name: 'Quản lý biên bản' },
-  });
-  await prisma.role.upsert({
-    where: { role_id: 3 },
-    update: { role_name: 'Người dùng tra cứu' },
-    create: { role_id: 3, role_name: 'Người dùng tra cứu' },
-  });
-  await prisma.role.upsert({
-    where: { role_id: 4 },
-    update: { role_name: 'Người dùng' },
-    create: { role_id: 4, role_name: 'Người dùng' },
-  });
+const roles = [
+  { role_id: 1, role_name: 'Admin' },
+  { role_id: 2, role_name: 'Quản lý biên bản' },
+  { role_id: 3, role_name: 'Người dùng tra cứu' },
+  { role_id: 4, role_name: 'Người dùng' },
+];
 
-  await prisma.minuteType.upsert({
-    where: { type_id: 1 },
-    update: { type_name: 'Họp lớp thường kỳ' },
-    create: { type_id: 1, type_name: 'Họp lớp thường kỳ' },
-  });
-  await prisma.minuteType.upsert({
-    where: { type_id: 2 },
-    update: { type_name: 'Họp bất thường' },
-    create: { type_id: 2, type_name: 'Họp bất thường' },
-  });
-  await prisma.minuteType.upsert({
-    where: { type_id: 3 },
-    update: { type_name: 'Họp tổng kết' },
-    create: { type_id: 3, type_name: 'Họp tổng kết' },
-  });
-  await prisma.minuteType.upsert({
-    where: { type_id: 4 },
-    update: { type_name: 'Họp đầu năm học' },
-    create: { type_id: 4, type_name: 'Họp đầu năm học' },
-  });
+const minuteTypes = [
+  { type_id: 1, type_name: 'Mẫu biên bản họp lớp chi tiết nhất' },
+  { type_id: 2, type_name: 'Mẫu biên bản họp lớp bầu ban cán sự' },
+  { type_id: 3, type_name: 'Mẫu biên bản họp lớp bầu lớp trưởng' },
+  { type_id: 4, type_name: 'Mẫu biên bản họp lớp tổng kết cuối kì' },
+  { type_id: 5, type_name: 'Mẫu biên bản họp lớp kỷ luật học sinh' },
+  { type_id: 6, type_name: 'Mẫu biên bản họp lớp đầu năm học' },
+];
+
+async function main() {
+  for (const role of roles) {
+    await prisma.role.upsert({
+      where: { role_id: role.role_id },
+      update: { role_name: role.role_name },
+      create: role,
+    });
+  }
+
+  for (const type of minuteTypes) {
+    await prisma.minuteType.upsert({
+      where: { type_id: type.type_id },
+      update: { type_name: type.type_name },
+      create: type,
+    });
+  }
 
   const hashedPassword = await bcrypt.hash('Admin@123', 10);
   await prisma.user.upsert({
@@ -64,8 +54,8 @@ async function main() {
 }
 
 main()
-  .catch((e) => {
-    console.error(e);
+  .catch((error) => {
+    console.error(error);
     process.exit(1);
   })
   .finally(async () => {
