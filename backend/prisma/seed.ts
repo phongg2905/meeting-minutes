@@ -36,7 +36,7 @@ const users = [
   {
     role_id: 3,
     full_name: 'Lê Hoài Phương',
-    email: '  ',
+    email: 'student@school.edu.vn',
     phone: '0934567890',
     password: 'User@123',
   },
@@ -517,11 +517,6 @@ async function seedOperationalData(userMap: Record<string, { user_id: number; fu
 }
 
 async function main() {
-  if (process.env.NODE_ENV === 'production') {
-    console.warn('⚠️ Cảnh báo bảo mật: Không chạy seed dữ liệu mẫu trên môi trường Production.');
-    process.exit(0);
-  }
-
   await upsertBaseData();
   const userMap = await upsertUsers();
   await seedMeetingMinutes(userMap);
