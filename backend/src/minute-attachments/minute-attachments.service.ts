@@ -1,14 +1,13 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { promises as fs } from 'fs';
-import { extname, join } from 'path';
+import { extname } from 'path';
 import { randomUUID } from 'crypto';
 import { ActivityLogsService } from '../activity-logs/activity-logs.service';
 import { canManageMinute, canWriteMinutes, isPublicMinute, isSystemAdmin } from '../auth/roles.constants';
 
 @Injectable()
 export class MinuteAttachmentsService {
-  private readonly uploadDir = join(process.cwd(), 'uploads', 'attachments');
+  private readonly storageBucket = process.env.SUPABASE_STORAGE_BUCKET || 'meeting-attachments';
   private readonly maxFileSize = 10 * 1024 * 1024;
   private readonly allowedMimeTypes = new Set([
     'application/pdf',
@@ -49,23 +48,21 @@ export class MinuteAttachmentsService {
     if (!canWriteMinutes(roleId)) throw new ForbiddenException('Tài khoản này chỉ được tra cứu');
     this.validateFile(file);
     await this.assertMinuteWriteAccess(minuteId, uploadedBy, roleId);
-    await fs.mkdir(this.uploadDir, { recursive: true });
-
     const extension = extname(file.originalname).toLowerCase();
     const safeBaseName = file.originalname
       .replace(extension, '')
       .replace(/[^a-zA-Z0-9._-]/g, '_')
       .slice(0, 80);
     const safeName = `${Date.now()}-${randomUUID()}-${safeBaseName}${extension}`;
-    const fullPath = join(this.uploadDir, safeName);
-    await fs.writeFile(fullPath, file.buffer);
+    const storagePath = `minute-attachments/${minuteId}/${safeName}`;
+    await this.uploadToSupabase(storagePath, file.buffer, file.mimetype);
 
     const attachment = await this.prisma.minuteAttachment.create({
       data: {
         minute_id: minuteId,
         uploaded_by: uploadedBy,
         file_name: file.originalname,
-        file_path: fullPath,
+        file_path: storagePath,
         file_type: file.mimetype,
       },
       include: { uploader: { select: { full_name: true } } },
@@ -83,7 +80,8 @@ export class MinuteAttachmentsService {
     if (!attachment) throw new NotFoundException('Không tìm thấy tệp đính kèm');
     await this.assertMinuteAccess(attachment.minute_id, userId, roleId);
     await this.activityLogs.log(userId, 'DOWNLOAD', 'minute_attachments', id, `Tải xuống tệp: ${attachment.file_name}`);
-    return attachment;
+    const content = await this.readAttachmentContent(attachment.file_path);
+    return { attachment, content };
   }
 
   async remove(id: number, userId: number, roleId: number) {
@@ -97,12 +95,77 @@ export class MinuteAttachmentsService {
 
     await this.prisma.minuteAttachment.delete({ where: { attachment_id: id } });
     try {
-      await fs.unlink(attachment.file_path);
+      await this.deleteAttachmentContent(attachment.file_path);
     } catch {
       // File may already be gone; DB record has still been cleaned up.
     }
     await this.activityLogs.log(userId, 'DELETE', 'minute_attachments', id, `Xóa tệp: ${attachment.file_name}`);
     return { message: 'Xóa tệp đính kèm thành công' };
+  }
+
+  private async uploadToSupabase(path: string, buffer: Buffer, mimetype: string) {
+    const { url, serviceRoleKey } = this.getSupabaseConfig();
+    const response = await fetch(`${url}/storage/v1/object/${this.storageBucket}/${this.encodeStoragePath(path)}`, {
+      method: 'POST',
+      headers: {
+        apikey: serviceRoleKey,
+        Authorization: `Bearer ${serviceRoleKey}`,
+        'Content-Type': mimetype,
+        'x-upsert': 'false',
+      },
+      body: buffer as any,
+    });
+
+    if (!response.ok) {
+      const detail = await response.text().catch(() => '');
+      throw new BadRequestException(`Không thể tải file lên Supabase Storage${detail ? `: ${detail}` : ''}`);
+    }
+  }
+
+  private async readAttachmentContent(path: string) {
+    const { url, serviceRoleKey } = this.getSupabaseConfig();
+    const response = await fetch(`${url}/storage/v1/object/${this.storageBucket}/${this.encodeStoragePath(path)}`, {
+      headers: {
+        apikey: serviceRoleKey,
+        Authorization: `Bearer ${serviceRoleKey}`,
+      },
+    });
+
+    if (!response.ok) {
+      throw new NotFoundException('Không thể tải nội dung file từ Supabase Storage');
+    }
+
+    return Buffer.from(await response.arrayBuffer());
+  }
+
+  private async deleteAttachmentContent(path: string) {
+    const { url, serviceRoleKey } = this.getSupabaseConfig();
+    const response = await fetch(`${url}/storage/v1/object/${this.storageBucket}`, {
+      method: 'DELETE',
+      headers: {
+        apikey: serviceRoleKey,
+        Authorization: `Bearer ${serviceRoleKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ prefixes: [path] }),
+    });
+
+    if (!response.ok) {
+      throw new BadRequestException('Không thể xóa file trên Supabase Storage');
+    }
+  }
+
+  private getSupabaseConfig() {
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const url = process.env.SUPABASE_URL?.replace(/\/$/, '');
+    if (!url || !serviceRoleKey) {
+      throw new BadRequestException('Chưa cấu hình SUPABASE_URL hoặc SUPABASE_SERVICE_ROLE_KEY để lưu file');
+    }
+    return { url, serviceRoleKey };
+  }
+
+  private encodeStoragePath(path: string) {
+    return path.split('/').map(encodeURIComponent).join('/');
   }
 
   private async assertMinuteAccess(minuteId: number, userId: number, roleId: number) {

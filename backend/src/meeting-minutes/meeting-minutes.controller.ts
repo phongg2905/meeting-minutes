@@ -1,5 +1,6 @@
-import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Query, Request, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Query, Request, Res, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Response } from 'express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CreateMeetingMinuteDto } from './dto/create-meeting-minute.dto';
 import { MeetingMinutesService } from './meeting-minutes.service';
@@ -11,7 +12,9 @@ import { UpdateMeetingMinuteDto } from './dto/update-meeting-minute.dto';
 @UseGuards(JwtAuthGuard)
 @Controller('meeting-minutes')
 export class MeetingMinutesController {
-  constructor(private service: MeetingMinutesService) {}
+  constructor(
+    private service: MeetingMinutesService,
+  ) {}
 
   @Get()
   @ApiOperation({ summary: 'Danh sách biên bản họp' })

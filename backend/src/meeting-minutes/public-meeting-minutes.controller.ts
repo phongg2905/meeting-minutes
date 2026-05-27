@@ -6,7 +6,9 @@ import { QueryMeetingMinuteDto } from './dto/query-meeting-minute.dto';
 @ApiTags('Public Meeting Minutes')
 @Controller('public/meeting-minutes')
 export class PublicMeetingMinutesController {
-  constructor(private readonly service: MeetingMinutesService) {}
+  constructor(
+    private readonly service: MeetingMinutesService,
+  ) {}
 
   @Get()
   @ApiOperation({ summary: 'Danh sách biên bản công khai' })

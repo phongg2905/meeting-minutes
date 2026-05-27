@@ -4,13 +4,14 @@ import { ActivityLogsService } from '../activity-logs/activity-logs.service';
 import { CreateBackupLogDto } from './dto/create-backup-log.dto';
 import { RestoreBackupDto } from './dto/restore-backup.dto';
 import { promises as fs } from 'fs';
-import { dirname, join } from 'path';
+import { join } from 'path';
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'crypto';
 
 @Injectable()
 export class BackupLogsService {
   private readonly backupDir = join(process.cwd(), 'backups');
   private readonly backupVersion = 1;
+  private readonly storageBucket = process.env.SUPABASE_STORAGE_BUCKET || 'meeting-attachments';
 
   constructor(
     private prisma: PrismaService,
@@ -91,7 +92,7 @@ export class BackupLogsService {
       minuteAttachments.map(async (attachment) => {
         let file_content_base64: string | null = null;
         try {
-          const content = await fs.readFile(attachment.file_path);
+          const content = await this.readStorageObject(attachment.file_path);
           file_content_base64 = content.toString('base64');
         } catch {
           file_content_base64 = null;
@@ -233,8 +234,11 @@ export class BackupLogsService {
       await Promise.all(
         data.minuteAttachments.map(async (attachment: any) => {
           if (!attachment.file_content_base64) return;
-          await fs.mkdir(dirname(attachment.file_path), { recursive: true });
-          await fs.writeFile(attachment.file_path, Buffer.from(attachment.file_content_base64, 'base64'));
+          await this.uploadStorageObject(
+            attachment.file_path,
+            Buffer.from(attachment.file_content_base64, 'base64'),
+            attachment.file_type || 'application/octet-stream',
+          );
         }),
       );
     }
@@ -257,6 +261,53 @@ export class BackupLogsService {
     if (process.env.NODE_ENV === 'production' && !process.env.BACKUP_ENCRYPTION_KEY) {
       throw new BadRequestException('Chưa cấu hình BACKUP_ENCRYPTION_KEY để mã hóa backup');
     }
+  }
+
+  private async readStorageObject(path: string) {
+    const { url, serviceRoleKey } = this.getSupabaseConfig();
+    const response = await fetch(`${url}/storage/v1/object/${this.storageBucket}/${this.encodeStoragePath(path)}`, {
+      headers: {
+        apikey: serviceRoleKey,
+        Authorization: `Bearer ${serviceRoleKey}`,
+      },
+    });
+
+    if (!response.ok) {
+      throw new NotFoundException('Không thể đọc file đính kèm từ Supabase Storage');
+    }
+
+    return Buffer.from(await response.arrayBuffer());
+  }
+
+  private async uploadStorageObject(path: string, content: Buffer, mimetype: string) {
+    const { url, serviceRoleKey } = this.getSupabaseConfig();
+    const response = await fetch(`${url}/storage/v1/object/${this.storageBucket}/${this.encodeStoragePath(path)}`, {
+      method: 'POST',
+      headers: {
+        apikey: serviceRoleKey,
+        Authorization: `Bearer ${serviceRoleKey}`,
+        'Content-Type': mimetype,
+        'x-upsert': 'true',
+      },
+      body: content as any,
+    });
+
+    if (!response.ok) {
+      throw new BadRequestException('Không thể ghi file đính kèm lên Supabase Storage');
+    }
+  }
+
+  private getSupabaseConfig() {
+    const url = process.env.SUPABASE_URL?.replace(/\/$/, '');
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!url || !serviceRoleKey) {
+      throw new BadRequestException('Chưa cấu hình SUPABASE_URL hoặc SUPABASE_SERVICE_ROLE_KEY để xử lý file backup');
+    }
+    return { url, serviceRoleKey };
+  }
+
+  private encodeStoragePath(path: string) {
+    return path.split('/').map(encodeURIComponent).join('/');
   }
 
   private encryptBackupPayload(payload: unknown) {

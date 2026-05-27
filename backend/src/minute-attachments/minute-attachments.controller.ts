@@ -31,8 +31,14 @@ export class MinuteAttachmentsController {
 
   @Get(':id/download')
   async download(@Param('id', ParseIntPipe) id: number, @Request() req, @Res() res: Response) {
-    const attachment = await this.service.getDownload(id, req.user.user_id, req.user.role_id);
-    return res.download(attachment.file_path, attachment.file_name);
+    const { attachment, content } = await this.service.getDownload(id, req.user.user_id, req.user.role_id);
+    const encodedName = encodeURIComponent(attachment.file_name).replace(/[!'()*]/g, (char) =>
+      `%${char.charCodeAt(0).toString(16).toUpperCase()}`,
+    );
+    res.setHeader('Content-Type', attachment.file_type || 'application/octet-stream');
+    res.setHeader('Content-Length', content.length);
+    res.setHeader('Content-Disposition', `attachment; filename="${attachment.file_name.replace(/"/g, '')}"; filename*=UTF-8''${encodedName}`);
+    return res.send(content);
   }
 
   @Delete(':id')
