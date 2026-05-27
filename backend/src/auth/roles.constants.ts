@@ -1,7 +1,6 @@
 export const ROLE_ADMIN = 1;
 export const ROLE_MINUTE_MANAGER = 2;
-export const ROLE_SEARCH_USER = 3;
-export const ROLE_STANDARD_USER = 4;
+export const ROLE_STANDARD_USER = 3;
 
 export const MINUTE_STATUS_DRAFT = 'draft';
 export const MINUTE_STATUS_COMPLETED = 'completed';
