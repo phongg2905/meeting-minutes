@@ -86,7 +86,7 @@ function TextBlock({ value, minLines = 2 }: { value?: string; minLines?: number 
 
 function SignatureRow({ labels }: { labels: string[] }) {
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: `repeat(${labels.length}, 1fr)`, gap: 16, marginTop: 28, textAlign: 'center' }}>
+    <div className="signature-row" style={{ display: 'grid', gridTemplateColumns: `repeat(${labels.length}, 1fr)`, gap: 16, marginTop: 28, textAlign: 'center' }}>
       {labels.map((label) => (
         <div key={label}>
           <div style={{ fontWeight: 700, textTransform: 'uppercase' }}>{label}</div>
@@ -162,7 +162,7 @@ function DetailedClassMeetingPreview({ minute }: { minute: Partial<MeetingMinute
   const time = getPrintableMinuteTime(minute)
 
   return (
-    <div style={documentStyle}>
+    <div className="minute-document" style={documentStyle}>
       <Header />
 
       <div style={{ marginTop: 22 }}>
@@ -233,7 +233,7 @@ function StaffElectionPreview({ minute }: { minute: Partial<MeetingMinute> }) {
   const secretaryName = String(data.secretary_name || minute.secretary_name || '')
 
   return (
-    <div style={documentStyle}>
+    <div className="minute-document" style={documentStyle}>
       <Header />
 
       <div style={labelStyle}>1. Thời gian, địa điểm, mục đích tổ chức cuộc họp:</div>
@@ -328,7 +328,7 @@ function ClassLeaderElectionPreview({ minute }: { minute: Partial<MeetingMinute>
   const time = getPrintableMinuteTime(minute)
 
   return (
-    <div style={documentStyle}>
+    <div className="minute-document" style={documentStyle}>
       <Header />
 
       <div style={{ marginTop: 22 }}>
@@ -403,7 +403,7 @@ function SemesterSummaryPreview({ minute }: { minute: Partial<MeetingMinute> }) 
   const time = getPrintableMinuteTime(minute)
 
   return (
-    <div style={documentStyle}>
+    <div className="minute-document" style={documentStyle}>
       <Header />
 
       <div style={{ marginTop: 22 }}>
@@ -449,7 +449,7 @@ function SemesterSummaryPreview({ minute }: { minute: Partial<MeetingMinute> }) 
         Biên bản kết thúc vào {time.end} cùng ngày
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginTop: 20, textAlign: 'center' }}>
+      <div className="signature-row" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginTop: 20, textAlign: 'center' }}>
         {['Giáo viên chủ nhiệm', 'Chủ tọa', 'Thư ký'].map((label) => (
           <div key={label}>
             <div style={{ fontWeight: 700 }}>{label}</div>
@@ -488,7 +488,7 @@ function StudentDisciplinePreview({ minute }: { minute: Partial<MeetingMinute> }
   const data = minute.template_data || {}
 
   return (
-    <div style={documentStyle}>
+    <div className="minute-document" style={documentStyle}>
       <Header />
 
       <div style={{ textAlign: 'right', marginTop: 18, fontStyle: 'italic' }}>
@@ -589,7 +589,7 @@ function OpeningSchoolYearPreview({ minute }: { minute: Partial<MeetingMinute> }
   const secretaryName = data.secretary_name || minute.secretary_name
 
   return (
-    <div style={documentStyle}>
+    <div className="minute-document" style={documentStyle}>
       <div style={{ display: 'grid', gridTemplateColumns: '0.9fr 1.1fr', gap: 24 }}>
         <div style={{ textAlign: 'center', fontWeight: 700 }}>
           <div>Trường {text(data.school_name, '............................')}</div>
@@ -667,7 +667,7 @@ export default function MinuteDocumentPreview({ minute, typeName }: Props) {
       : ['Chủ trì', 'Thư ký']
 
   return (
-    <div style={documentStyle}>
+    <div className="minute-document" style={documentStyle}>
       <Header />
 
       {resolvedTypeName && (

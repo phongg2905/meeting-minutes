@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { publicMeetingMinutesService } from '../../services'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Breadcrumb, Button, Card, Descriptions, Empty, Space, Spin, Tag, Typography } from 'antd'
-import { ArrowLeftOutlined } from '@ant-design/icons'
+import { ArrowLeftOutlined, PrinterOutlined } from '@ant-design/icons'
 import { STATUS_COLORS, STATUS_LABELS, formatDate, formatTime } from '../../utils'
 
 const { Text, Title } = Typography
@@ -43,13 +43,18 @@ export default function PublicMeetingDetailPage() {
                 Lớp {minute.class_name} - {formatDate(minute.meeting_date)}
               </Text>
             </div>
-            <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/public/meetings')}>
-              Quay lại
-            </Button>
+            <Space wrap>
+              <Button icon={<PrinterOutlined />} onClick={() => window.open(`/public/meetings/${id}/print`, '_blank')}>
+                Xuất PDF
+              </Button>
+              <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/public/meetings')}>
+                Quay lại
+              </Button>
+            </Space>
           </div>
         </Card>
 
-        <Card title="Thông tin tóm tắt">
+        <Card title="Thông tin tóm tắt" style={{ marginBottom: 16 }}>
           <Descriptions bordered column={{ xs: 1, md: 2, lg: 3 }} size="small">
             <Descriptions.Item label="Mã biên bản">{minute.minute_code}</Descriptions.Item>
             <Descriptions.Item label="Loại biên bản">{minute.minute_type?.type_name}</Descriptions.Item>
@@ -62,6 +67,7 @@ export default function PublicMeetingDetailPage() {
             <Descriptions.Item label="Thư ký">{minute.secretary_name || 'Không ghi'}</Descriptions.Item>
           </Descriptions>
         </Card>
+
       </div>
     </div>
   )
