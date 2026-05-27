@@ -4,12 +4,14 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { Breadcrumb, Button, Card, Descriptions, Empty, Space, Spin, Tag, Typography } from 'antd'
 import { ArrowLeftOutlined, PrinterOutlined } from '@ant-design/icons'
 import { STATUS_COLORS, STATUS_LABELS, formatDate, formatTime } from '../../utils'
+import { useAuthStore } from '../../store/authStore'
 
 const { Text, Title } = Typography
 
 export default function PublicMeetingDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const { isAuthenticated } = useAuthStore()
   const { data: minute, isLoading } = useQuery({
     queryKey: ['public-meeting', id],
     queryFn: () => publicMeetingMinutesService.getOne(Number(id)),
@@ -44,9 +46,11 @@ export default function PublicMeetingDetailPage() {
               </Text>
             </div>
             <Space wrap>
-              <Button icon={<PrinterOutlined />} onClick={() => window.open(`/public/meetings/${id}/print`, '_blank')}>
-                Xuất PDF
-              </Button>
+              {isAuthenticated && (
+                <Button icon={<PrinterOutlined />} onClick={() => window.open(`/public/meetings/${id}/print`, '_blank')}>
+                  Xuất PDF
+                </Button>
+              )}
               <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/public/meetings')}>
                 Quay lại
               </Button>
