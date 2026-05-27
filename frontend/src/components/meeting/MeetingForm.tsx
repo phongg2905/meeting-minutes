@@ -28,6 +28,7 @@ import {
   getMinuteTypeName,
   getStructuredTemplateDefaults,
 } from '../../utils/minuteTemplates'
+import { formatTime } from '../../utils'
 import MinuteDocumentPreview from './MinuteDocumentPreview'
 import StructuredMinuteFields from './StructuredMinuteFields'
 
@@ -86,8 +87,8 @@ export default function MeetingForm({ initialValues, onSubmit, loading, mode = '
     form.setFieldsValue({
       ...initialValues,
       meeting_date: initialValues.meeting_date ? dayjs(initialValues.meeting_date) : null,
-      start_time: initialValues.start_time ? dayjs(initialValues.start_time) : null,
-      end_time: initialValues.end_time ? dayjs(initialValues.end_time) : null,
+      start_time: initialValues.start_time ? dayjs(`1970-01-01T${formatTime(initialValues.start_time)}`) : null,
+      end_time: initialValues.end_time ? dayjs(`1970-01-01T${formatTime(initialValues.end_time)}`) : null,
       template_data: normalizeTemplateData(initialValues.template_data),
       tasks: initialValues.tasks?.map((task) => ({
         ...task,
@@ -125,6 +126,8 @@ export default function MeetingForm({ initialValues, onSubmit, loading, mode = '
 
   const handleFinish = (values: any) => {
     const structuredContent = buildStructuredMinuteContent(values.type_id, values.template_data)
+    const templateHostName = values.template_data?.chair_name
+    const templateSecretaryName = values.template_data?.secretary_name
 
     onSubmit({
       ...values,
@@ -132,8 +135,8 @@ export default function MeetingForm({ initialValues, onSubmit, loading, mode = '
       meeting_date: values.meeting_date?.format('YYYY-MM-DD'),
       start_time: values.start_time?.format('HH:mm'),
       end_time: values.end_time?.format('HH:mm'),
-      host_name: values.host_name || values.template_data?.chair_name,
-      secretary_name: values.secretary_name || values.template_data?.secretary_name,
+      host_name: templateHostName || values.host_name,
+      secretary_name: templateSecretaryName || values.secretary_name,
       discussion_content: structuredContent || values.discussion_content || 'Chưa nhập nội dung',
       participants: values.participants || [],
       tasks: values.tasks || [],
