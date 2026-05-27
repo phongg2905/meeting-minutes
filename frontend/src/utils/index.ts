@@ -6,8 +6,11 @@ export const formatDate = (date?: string) =>
 export const formatDateTime = (date?: string) =>
   date ? dayjs(date).format('DD/MM/YYYY HH:mm') : '-'
 
-export const formatTime = (time?: string) => {
+export const formatTime = (time?: any) => {
   if (!time) return '-'
+  if (typeof time === 'string' && /^\d{2}:\d{2}/.test(time)) return time.slice(0, 5)
+  const isoTime = typeof time === 'string' ? time.match(/T(\d{2}:\d{2})/) : null
+  if (isoTime) return isoTime[1]
   return dayjs(time).format('HH:mm')
 }
 

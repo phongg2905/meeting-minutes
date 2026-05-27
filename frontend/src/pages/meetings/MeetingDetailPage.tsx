@@ -9,6 +9,7 @@ import {
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useParams } from 'react-router-dom'
 import type React from 'react'
+import { useRef, useState } from 'react'
 import { meetingMinutesService, minuteAttachmentsService } from '../../services'
 import { useAuthStore } from '../../store/authStore'
 import {
@@ -17,11 +18,59 @@ import {
   TASK_STATUS_LABELS, TASK_STATUS_COLORS,
   ATTENDANCE_LABELS, canWriteMinutes, isAdmin
 } from '../../utils'
-import { useRef } from 'react'
-import { exportElementToPdf } from '../../utils/exportPdf'
-import MinuteDocumentPreview from '../../components/meeting/MinuteDocumentPreview'
+import MeetingMinuteDocumentView from '../../components/meeting/MeetingMinuteDocumentView'
+import { STRUCTURED_TEMPLATE_SECTIONS, type TemplateField } from '../../utils/minuteTemplates'
 
 const { Title, Text, Paragraph } = Typography
+
+function hasTemplateValue(value: any, field: TemplateField) {
+  if (value === undefined || value === null || value === '') return false
+  if (field.type === 'table') {
+    return Array.isArray(value) && value.some((row) => (
+      field.columns || []
+    ).some((column) => row?.[column.name] !== undefined && row?.[column.name] !== null && row?.[column.name] !== ''))
+  }
+  return true
+}
+
+function renderTemplateField(field: TemplateField, data: Record<string, any>) {
+  const value = data?.[field.name]
+  if (!hasTemplateValue(value, field)) return null
+
+  if (field.type === 'table' && Array.isArray(value)) {
+    const rows = value
+      .filter((row) => (field.columns || []).some((column) => row?.[column.name]))
+      .map((row, index) => ({ key: index, ...row }))
+
+    return (
+      <div key={field.name} style={{ marginBottom: 16 }}>
+        <Text strong style={{ display: 'block', marginBottom: 8, color: '#0f2644' }}>{field.label}</Text>
+        <Table
+          bordered
+          size="small"
+          pagination={false}
+          dataSource={rows}
+          columns={(field.columns || []).map((column) => ({
+            title: column.label,
+            dataIndex: column.name,
+            key: column.name,
+            render: (cell: any) => cell || '—',
+          }))}
+          scroll={{ x: 640 }}
+        />
+      </div>
+    )
+  }
+
+  return (
+    <div key={field.name} style={{ marginBottom: 16 }}>
+      <Text strong style={{ display: 'block', marginBottom: 6, color: '#0f2644' }}>{field.label}</Text>
+      <Paragraph style={{ background: '#f8fafc', padding: '12px 16px', borderRadius: 8, margin: 0, whiteSpace: 'pre-wrap' }}>
+        {String(value)}
+      </Paragraph>
+    </div>
+  )
+}
 
 export default function MeetingDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -29,7 +78,6 @@ export default function MeetingDetailPage() {
   const queryClient = useQueryClient()
   const { user } = useAuthStore()
   const fileInputRef = useRef<HTMLInputElement | null>(null)
-  const exportRef = useRef<HTMLDivElement | null>(null)
 
   const { data: minute, isLoading } = useQuery({
     queryKey: ['meeting-minute', id],
@@ -72,6 +120,8 @@ export default function MeetingDetailPage() {
   if (!minute) return <Empty description="Không tìm thấy biên bản" />
 
   const canEdit = canWriteMinutes(user?.role_id) && (isAdmin(user?.role_id) || minute.created_by === user?.user_id)
+  const structuredSections = STRUCTURED_TEMPLATE_SECTIONS[minute.type_id] || []
+  const templateData = minute.template_data || {}
 
   const participantColumns = [
     { title: '#', key: 'index', width: 50, render: (_: any, __: any, i: number) => i + 1 },
@@ -108,9 +158,8 @@ export default function MeetingDetailPage() {
     event.target.value = ''
   }
 
-  const handleExportPdf = async () => {
-    if (!exportRef.current) return
-    await exportElementToPdf(exportRef.current, `${minute.minute_code || 'meeting-minute'}.pdf`)
+  const handleExportPdf = () => {
+    window.open(`/meetings/${id}/print`, '_blank')
   }
 
   const tabItems = [
@@ -147,17 +196,36 @@ export default function MeetingDetailPage() {
             </Card>
           )}
 
-          <Divider orientation="left">Nội dung cuộc họp</Divider>
+          <Divider orientation="left">Nội dung theo cấu trúc biểu mẫu</Divider>
           {minute.purpose && (
             <div style={{ marginBottom: 16 }}>
               <Text strong style={{ display: 'block', marginBottom: 6, color: '#0f2644' }}>Mục đích:</Text>
               <Paragraph style={{ background: '#f8fafc', padding: '12px 16px', borderRadius: 8, margin: 0 }}>{minute.purpose}</Paragraph>
             </div>
           )}
-          <div style={{ marginBottom: 16 }}>
-            <Text strong style={{ display: 'block', marginBottom: 6, color: '#0f2644' }}>Nội dung theo mẫu:</Text>
-            <Paragraph style={{ background: '#f8fafc', padding: '12px 16px', borderRadius: 8, margin: 0, whiteSpace: 'pre-wrap' }}>{minute.discussion_content}</Paragraph>
-          </div>
+          {structuredSections.length ? (
+            structuredSections.map((section) => {
+              const fields = section.fields
+                .map((field) => renderTemplateField(field, templateData))
+                .filter(Boolean)
+
+              if (!fields.length) return null
+
+              return (
+                <div key={section.title} style={{ marginBottom: 20 }}>
+                  <Divider orientation="left" style={{ marginTop: 8, fontSize: 14 }}>
+                    {section.title}
+                  </Divider>
+                  {fields}
+                </div>
+              )
+            })
+          ) : (
+            <div style={{ marginBottom: 16 }}>
+              <Text strong style={{ display: 'block', marginBottom: 6, color: '#0f2644' }}>Nội dung:</Text>
+              <Paragraph style={{ background: '#f8fafc', padding: '12px 16px', borderRadius: 8, margin: 0, whiteSpace: 'pre-wrap' }}>{minute.discussion_content}</Paragraph>
+            </div>
+          )}
           {minute.conclusion_content && (
             <div style={{ marginBottom: 16 }}>
               <Text strong style={{ display: 'block', marginBottom: 6, color: '#0f2644' }}>Kết luận / ý kiến góp ý:</Text>
@@ -177,9 +245,7 @@ export default function MeetingDetailPage() {
       key: 'document',
       label: <span><FileTextOutlined /> Biểu mẫu</span>,
       children: (
-        <div ref={exportRef}>
-          <MinuteDocumentPreview minute={minute} typeName={minute.minute_type?.type_name} />
-        </div>
+        <MeetingMinuteDocumentView minute={minute} typeName={minute.minute_type?.type_name} />
       ),
     },
     {
@@ -289,6 +355,7 @@ export default function MeetingDetailPage() {
       <Card style={{ borderRadius: 12, boxShadow: '0 1px 8px rgba(0,0,0,0.06)' }}>
         <Tabs items={tabItems} defaultActiveKey="document" />
       </Card>
+
     </div>
   )
 }

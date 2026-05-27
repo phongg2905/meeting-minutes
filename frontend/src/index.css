@@ -61,3 +61,131 @@ body {
 .ant-card { border-radius: 12px !important; }
 .ant-table-wrapper .ant-table { border-radius: 12px !important; }
 .ant-btn { font-weight: 500 !important; }
+
+/* ======== Print / Export PDF Styles ======== */
+
+.print-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 14px 24px;
+  background: #f0f4f8;
+  border-bottom: 1px solid #e2e8f0;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.print-toolbar button {
+  padding: 8px 20px;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.15s;
+}
+.print-toolbar button:active { transform: scale(0.97); }
+.print-toolbar .btn-print {
+  background: #1a56a0;
+  color: #fff;
+}
+.print-toolbar .btn-print:hover { background: #164a8a; }
+.print-toolbar .btn-back {
+  background: #e2e8f0;
+  color: #334155;
+}
+.print-toolbar .btn-back:hover { background: #cbd5e1; }
+
+@media print {
+  /* Hide everything except print content */
+  body {
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #fff !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Hide navigation, sidebar, header, toolbar, breadcrumb, buttons, tabs header */
+  .ant-layout-sider,
+  .ant-layout-header,
+  .ant-breadcrumb,
+  .ant-tabs-nav,
+  .ant-btn,
+  .ant-spin,
+  .ant-empty,
+  .print-toolbar,
+  nav,
+  header,
+  footer,
+  aside {
+    display: none !important;
+  }
+
+  /* Reset layout containers */
+  .ant-layout,
+  .ant-layout-content,
+  .ant-card,
+  .ant-card-body,
+  .ant-tabs,
+  .ant-tabs-content,
+  .ant-tabs-tabpane {
+    padding: 0 !important;
+    margin: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    background: transparent !important;
+    overflow: visible !important;
+  }
+
+  /* Print content takes full page */
+  .print-content {
+    display: block !important;
+    width: 100% !important;
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* Document style for biên bản */
+  .print-content .minute-document {
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    font-family: 'Times New Roman', serif !important;
+    font-size: 14pt !important;
+    line-height: 1.5 !important;
+    color: #000 !important;
+  }
+
+  /* Page setup */
+  @page {
+    size: A4;
+    margin: 20mm 18mm;
+  }
+
+  /* Avoid bad breaks */
+  table, thead, tr, th, td {
+    page-break-inside: avoid !important;
+  }
+
+  /* Signature row should not break */
+  .signature-row {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  /* Keep headings with next content */
+  h1, h2, h3, h4, h5, h6, .label-style {
+    page-break-after: avoid !important;
+  }
+
+  /* Links should not show href */
+  a[href]::after {
+    content: none !important;
+  }
+}

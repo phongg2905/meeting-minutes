@@ -834,7 +834,7 @@ export function getMinuteTemplate(typeId?: number) {
 
 export function getStructuredTemplateDefaults(typeId?: number) {
   if (!typeId) return {}
-  return STRUCTURED_TEMPLATE_DEFAULT_DATA[typeId] || {}
+  return JSON.parse(JSON.stringify(STRUCTURED_TEMPLATE_DEFAULT_DATA[typeId] || {}))
 }
 
 export function buildStructuredMinuteContent(

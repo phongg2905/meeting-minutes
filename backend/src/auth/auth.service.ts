@@ -7,6 +7,7 @@ import { UsersService } from '../users/users.service';
 import { ActivityLogsService } from '../activity-logs/activity-logs.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { RegisterDto } from './dto/register.dto';
+import { ROLE_STANDARD_USER } from './roles.constants';
 
 @Injectable()
 export class AuthService {
@@ -49,7 +50,7 @@ export class AuthService {
     const hashed = await bcrypt.hash(dto.password, 10);
     const user = await this.prisma.user.create({
       data: {
-        role_id: 4,
+        role_id: ROLE_STANDARD_USER,
         full_name: dto.full_name,
         email: dto.email,
         phone: dto.phone,

@@ -56,7 +56,7 @@ export default function MainLayout() {
   const menuItems = [
     { key: '/dashboard', icon: <DashboardOutlined />, label: 'Tổng quan' },
     {
-      key: '/meetings',
+      key: 'meetings',
       icon: <FileTextOutlined />,
       label: 'Biên bản họp',
       children: [
@@ -210,9 +210,12 @@ export default function MainLayout() {
           theme="dark"
           mode="inline"
           selectedKeys={[location.pathname]}
-          defaultOpenKeys={['/meetings', 'admin']}
+          defaultOpenKeys={['meetings', 'admin']}
           items={menuItems}
-          onClick={({ key }) => navigate(key)}
+          onClick={({ key }) => {
+            if (key === 'meetings' || key === 'admin') return
+            navigate(key)
+          }}
           style={{ background: 'transparent', border: 'none', marginTop: 8 }}
         />
 
@@ -257,7 +260,7 @@ export default function MainLayout() {
           />
 
           <Space size={12}>
-            <Dropdown dropdownRender={() => notificationPanel} trigger={['click']} placement="bottomRight">
+            <Dropdown popupRender={() => notificationPanel} trigger={['click']} placement="bottomRight">
               <Badge count={unreadData?.count || 0} size="small">
                 <Button type="text" aria-label="Thông báo" icon={<BellOutlined style={{ fontSize: 18 }} />} />
               </Badge>

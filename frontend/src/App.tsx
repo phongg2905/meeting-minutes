@@ -9,12 +9,14 @@ const MeetingsListPage = lazy(() => import('./pages/meetings/MeetingsListPage'))
 const MeetingCreatePage = lazy(() => import('./pages/meetings/MeetingCreatePage'))
 const MeetingEditPage = lazy(() => import('./pages/meetings/MeetingEditPage'))
 const MeetingDetailPage = lazy(() => import('./pages/meetings/MeetingDetailPage'))
+const MeetingPrintPage = lazy(() => import('./pages/meetings/MeetingPrintPage'))
 const UsersPage = lazy(() => import('./pages/admin/UsersPage'))
 const ActivityLogsPage = lazy(() => import('./pages/admin/ActivityLogsPage'))
 const BackupLogsPage = lazy(() => import('./pages/admin/BackupLogsPage'))
 const ProfilePage = lazy(() => import('./pages/ProfilePage'))
 const PublicMeetingsListPage = lazy(() => import('./pages/public/PublicMeetingsListPage'))
 const PublicMeetingDetailPage = lazy(() => import('./pages/public/PublicMeetingDetailPage'))
+const PublicMeetingPrintPage = lazy(() => import('./pages/public/PublicMeetingPrintPage'))
 const SupportRequestsPage = lazy(() => import('./pages/support/SupportRequestsPage'))
 const SystemHealthPage = lazy(() => import('./pages/admin/SystemHealthPage'))
 const ManagerRoleRequestPage = lazy(() => import('./pages/manager/ManagerRoleRequestPage'))
@@ -39,6 +41,7 @@ export default function App() {
         <Route path="/" element={<Navigate to={isAuthenticated ? '/dashboard' : '/public/meetings'} replace />} />
         <Route path="/public/meetings" element={<PublicMeetingsListPage />} />
         <Route path="/public/meetings/:id" element={<PublicMeetingDetailPage />} />
+        <Route path="/public/meetings/:id/print" element={<ProtectedRoute><PublicMeetingPrintPage /></ProtectedRoute>} />
         <Route
           path="/login"
           element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <LoginPage />}
@@ -61,6 +64,7 @@ export default function App() {
           <Route path="admin/backup-logs" element={<AdminRoute><BackupLogsPage /></AdminRoute>} />
           <Route path="admin/health" element={<AdminRoute><SystemHealthPage /></AdminRoute>} />
         </Route>
+        <Route path="/meetings/:id/print" element={<ProtectedRoute><MeetingPrintPage /></ProtectedRoute>} />
         <Route path="*" element={<Navigate to={isAuthenticated ? '/dashboard' : '/public/meetings'} replace />} />
       </Routes>
     </Suspense>

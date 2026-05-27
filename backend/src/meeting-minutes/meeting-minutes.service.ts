@@ -10,7 +10,6 @@ import {
   MINUTE_STATUS_COMPLETED,
   MINUTE_STATUS_DRAFT,
   ROLE_ADMIN,
-  ROLE_SEARCH_USER,
   ROLE_STANDARD_USER,
   canManageMinute,
   canWriteMinutes,
@@ -105,12 +104,18 @@ export class MeetingMinutesService {
       include: {
         minute_type: true,
         creator: { select: { user_id: true, full_name: true, status: true } },
+        tasks: { orderBy: { task_id: 'asc' } },
+        participants: { orderBy: { participant_id: 'asc' } },
+        attachments: {
+          include: { uploader: { select: { user_id: true, full_name: true } } },
+          orderBy: { uploaded_at: 'desc' },
+        },
       },
     });
     if (!minute || !this.isVisibleToNonOwner(minute) || (minute.creator as any)?.status !== 'active') {
       throw new NotFoundException('Không tìm thấy biên bản công khai');
     }
-    return this.toPublicSummary(minute);
+    return this.toPublicDetail(minute);
   }
 
   async create(dto: CreateMeetingMinuteDto, userId: number) {
@@ -294,7 +299,7 @@ export class MeetingMinutesService {
     });
     await this.activityLogs.log(userId, 'PUBLIC_CHANGE', 'meeting_minutes', id, `${isPublic ? 'Công khai' : 'Ẩn'} biên bản`);
     if (isPublic) {
-      await this.notifications.createForRoles([ROLE_SEARCH_USER, ROLE_STANDARD_USER], {
+      await this.notifications.createForRoles([ROLE_STANDARD_USER], {
         title: 'Có biên bản công khai mới',
         message: `${existing.minute_code} - ${existing.title}`,
         type: 'minute',
@@ -366,6 +371,24 @@ export class MeetingMinutesService {
       updated_at: minute.updated_at,
       minute_type: minute.minute_type,
       creator: minute.creator ? { user_id: minute.creator.user_id, full_name: minute.creator.full_name } : undefined,
+    };
+  }
+
+  private toPublicDetail(minute: any) {
+    return {
+      ...this.toPublicSummary(minute),
+      type_id: minute.type_id,
+      meeting_form: minute.meeting_form,
+      attendee_summary: minute.attendee_summary,
+      absentee_summary: minute.absentee_summary,
+      purpose: minute.purpose,
+      discussion_content: minute.discussion_content,
+      conclusion_content: minute.conclusion_content,
+      followup_summary: minute.followup_summary,
+      template_data: minute.template_data,
+      participants: minute.participants,
+      tasks: minute.tasks,
+      attachments: minute.attachments,
     };
   }
 
