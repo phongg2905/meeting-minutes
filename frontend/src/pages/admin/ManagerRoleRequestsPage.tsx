@@ -1,4 +1,4 @@
-import { Button, Card, Input, message, Popconfirm, Space, Table, Tag } from 'antd'
+import { Button, Card, Input, message, Popconfirm, Space, Table, Tag, Tabs } from 'antd'
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { managerRoleRequestsService } from '../../services'
@@ -15,9 +15,14 @@ export default function ManagerRoleRequestsPage() {
   const queryClient = useQueryClient()
   const [responses, setResponses] = useState<Record<number, string>>({})
 
-  const { data, isLoading } = useQuery({
-    queryKey: ['manager-role-requests'],
-    queryFn: managerRoleRequestsService.getAll,
+  const pendingQuery = useQuery({
+    queryKey: ['manager-role-requests', 'pending'],
+    queryFn: managerRoleRequestsService.getPending,
+  })
+
+  const historyQuery = useQuery({
+    queryKey: ['manager-role-requests', 'history'],
+    queryFn: managerRoleRequestsService.getHistory,
   })
 
   const reviewMutation = useMutation({
@@ -26,11 +31,12 @@ export default function ManagerRoleRequestsPage() {
     onSuccess: () => {
       message.success('Đã cập nhật yêu cầu')
       queryClient.invalidateQueries({ queryKey: ['manager-role-requests'] })
+      setResponses({})
     },
     onError: (err: any) => message.error(err?.response?.data?.message || 'Không thể xử lý yêu cầu'),
   })
 
-  const columns = [
+  const pendingColumns = [
     {
       title: 'Người dùng',
       key: 'user',
@@ -41,38 +47,94 @@ export default function ManagerRoleRequestsPage() {
         </div>
       ),
     },
-    { title: 'Lý do', dataIndex: 'reason', key: 'reason', render: (value: string) => value || 'Không ghi lý do' },
+    {
+      title: 'Lý do',
+      dataIndex: 'reason',
+      key: 'reason',
+      render: (value: string) => value || 'Không ghi lý do',
+    },
     {
       title: 'Trạng thái',
       dataIndex: 'status',
       key: 'status',
       render: (value: string) => <Tag color={statusMap[value]?.color || 'default'}>{statusMap[value]?.label || value}</Tag>,
     },
-    { title: 'Thời gian gửi', dataIndex: 'created_at', key: 'created_at', render: (value: string) => formatDateTime(value) },
+    {
+      title: 'Thời gian gửi',
+      dataIndex: 'created_at',
+      key: 'created_at',
+      render: (value: string) => formatDateTime(value),
+    },
     {
       title: 'Phản hồi',
       key: 'response',
-      render: (_: any, record: ManagerRoleRequest) => record.status === 'pending' ? (
+      render: (_: any, record: ManagerRoleRequest) => (
         <Input
           placeholder="Ghi chú phản hồi"
           value={responses[record.request_id]}
           onChange={(event) => setResponses((prev) => ({ ...prev, [record.request_id]: event.target.value }))}
         />
-      ) : record.response || 'Không có',
+      ),
     },
     {
       title: 'Thao tác',
       key: 'actions',
-      render: (_: any, record: ManagerRoleRequest) => record.status === 'pending' ? (
+      render: (_: any, record: ManagerRoleRequest) => (
         <Space>
-          <Popconfirm title="Duyệt người dùng này làm quản lý?" onConfirm={() => reviewMutation.mutate({ id: record.request_id, status: 'approved' })}>
-            <Button type="primary" size="small">Duyệt</Button>
+          <Popconfirm
+            title="Duyệt người dùng này làm quản lý?"
+            onConfirm={() => reviewMutation.mutate({ id: record.request_id, status: 'approved' })}
+          >
+            <Button type="primary" size="small" loading={reviewMutation.isPending}>
+              Duyệt
+            </Button>
           </Popconfirm>
-          <Popconfirm title="Từ chối yêu cầu này?" onConfirm={() => reviewMutation.mutate({ id: record.request_id, status: 'rejected' })}>
-            <Button danger size="small">Từ chối</Button>
+          <Popconfirm
+            title="Từ chối yêu cầu này?"
+            onConfirm={() => reviewMutation.mutate({ id: record.request_id, status: 'rejected' })}
+          >
+            <Button danger size="small" loading={reviewMutation.isPending}>
+              Từ chối
+            </Button>
           </Popconfirm>
         </Space>
-      ) : null,
+      ),
+    },
+  ]
+
+  const historyColumns = [
+    {
+      title: 'Người dùng',
+      key: 'user',
+      render: (_: any, record: ManagerRoleRequest) => (
+        <div>
+          <strong>{record.user?.full_name}</strong>
+          <div style={{ color: '#64748b', fontSize: 12 }}>{record.user?.email}</div>
+        </div>
+      ),
+    },
+    {
+      title: 'Kết quả',
+      dataIndex: 'status',
+      key: 'status',
+      render: (value: string) => <Tag color={statusMap[value]?.color || 'default'}>{statusMap[value]?.label || value}</Tag>,
+    },
+    {
+      title: 'Phản hồi',
+      dataIndex: 'response',
+      key: 'response',
+      render: (value: string) => value || 'Không có',
+    },
+    {
+      title: 'Người duyệt',
+      key: 'reviewer',
+      render: (_: any, record: ManagerRoleRequest) => record.reviewer?.full_name || '-',
+    },
+    {
+      title: 'Thời gian xử lý',
+      dataIndex: 'updated_at',
+      key: 'updated_at',
+      render: (value: string) => formatDateTime(value),
     },
   ]
 
@@ -82,12 +144,37 @@ export default function ManagerRoleRequestsPage() {
         <h1 className="page-title">Yêu cầu làm quản lý</h1>
       </div>
       <Card>
-        <Table<ManagerRoleRequest>
-          dataSource={data || []}
-          columns={columns}
-          rowKey="request_id"
-          loading={isLoading}
-          scroll={{ x: 1000 }}
+        <Tabs
+          items={[
+            {
+              key: 'pending',
+              label: `Chờ duyệt (${pendingQuery.data?.length || 0})`,
+              children: (
+                <Table<ManagerRoleRequest>
+                  dataSource={pendingQuery.data || []}
+                  columns={pendingColumns}
+                  rowKey="request_id"
+                  loading={pendingQuery.isLoading}
+                  locale={{ emptyText: 'Không có yêu cầu chờ duyệt' }}
+                  scroll={{ x: 1000 }}
+                />
+              ),
+            },
+            {
+              key: 'history',
+              label: `Lịch sử duyệt (${historyQuery.data?.length || 0})`,
+              children: (
+                <Table<ManagerRoleRequest>
+                  dataSource={historyQuery.data || []}
+                  columns={historyColumns}
+                  rowKey="request_id"
+                  loading={historyQuery.isLoading}
+                  locale={{ emptyText: 'Chưa có lịch sử duyệt' }}
+                  scroll={{ x: 900 }}
+                />
+              ),
+            },
+          ]}
         />
       </Card>
     </div>
