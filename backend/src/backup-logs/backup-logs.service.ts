@@ -3,15 +3,15 @@ import { PrismaService } from '../prisma/prisma.service';
 import { ActivityLogsService } from '../activity-logs/activity-logs.service';
 import { CreateBackupLogDto } from './dto/create-backup-log.dto';
 import { RestoreBackupDto } from './dto/restore-backup.dto';
-import { promises as fs } from 'fs';
-import { join } from 'path';
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'crypto';
 
 @Injectable()
 export class BackupLogsService {
-  private readonly backupDir = join(process.cwd(), 'backups');
   private readonly backupVersion = 1;
-  private readonly storageBucket = process.env.SUPABASE_STORAGE_BUCKET || 'meeting-attachments';
+  private readonly attachmentBucket = process.env.SUPABASE_STORAGE_BUCKET || 'meeting-attachments';
+  private readonly backupBucket = process.env.BACKUP_STORAGE_BUCKET || 'system-backups';
+  private readonly backupPrefix = 'backups';
+  private readonly backupRetentionDays = Number(process.env.BACKUP_RETENTION_DAYS || 14);
 
   constructor(
     private prisma: PrismaService,
@@ -57,10 +57,9 @@ export class BackupLogsService {
 
   async runBackup(userId: number) {
     this.assertBackupEncryptionReady();
-    await fs.mkdir(this.backupDir, { recursive: true });
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     const fileName = `backup-${timestamp}.json`;
-    const filePath = join(this.backupDir, fileName);
+    const filePath = `${this.backupPrefix}/${fileName}`;
 
     const [
       roles,
@@ -119,7 +118,11 @@ export class BackupLogsService {
       },
     };
 
-    await fs.writeFile(filePath, JSON.stringify(this.encryptBackupPayload(payload), null, 2), 'utf-8');
+    await this.uploadBackupObject(
+      filePath,
+      Buffer.from(JSON.stringify(this.encryptBackupPayload(payload), null, 2), 'utf-8'),
+      'application/json',
+    );
 
     const log = await this.prisma.backupLog.create({
       data: {
@@ -130,6 +133,7 @@ export class BackupLogsService {
       },
     });
     await this.activityLogs.log(userId, 'BACKUP', 'backup_logs', log.backup_id, `Tao backup: ${fileName}`);
+    await this.cleanupExpiredBackups();
     return log;
   }
 
@@ -145,7 +149,7 @@ export class BackupLogsService {
       throw new NotFoundException('Khong tim thay ban sao luu hop le');
     }
 
-    const raw = await fs.readFile(backup.file_path, 'utf-8');
+    const raw = (await this.readBackupObject(backup.file_path)).toString('utf-8');
     const parsed = this.decryptBackupPayload(JSON.parse(raw));
     this.validateBackupPayload(parsed);
     const data = parsed.data;
@@ -321,9 +325,9 @@ export class BackupLogsService {
 
       if (remainingReferences === 0) {
         try {
-          await fs.unlink(log.file_path);
+          await this.deleteBackupObject(log.file_path);
         } catch {
-          // Ignore missing file errors so DB state remains source of truth.
+          // Ignore storage delete errors so DB state remains source of truth.
         }
       }
     }
@@ -339,8 +343,16 @@ export class BackupLogsService {
   }
 
   private async readStorageObject(path: string) {
+    return this.readObjectFromBucket(this.attachmentBucket, path, 'Khong the doc file dinh kem tu Supabase Storage');
+  }
+
+  private async readBackupObject(path: string) {
+    return this.readObjectFromBucket(this.backupBucket, path, 'Khong the doc file backup tu Supabase Storage');
+  }
+
+  private async readObjectFromBucket(bucket: string, path: string, errorMessage: string) {
     const { url, serviceRoleKey } = this.getSupabaseConfig();
-    const response = await fetch(`${url}/storage/v1/object/${this.storageBucket}/${this.encodeStoragePath(path)}`, {
+    const response = await fetch(`${url}/storage/v1/object/${bucket}/${this.encodeStoragePath(path)}`, {
       headers: {
         apikey: serviceRoleKey,
         Authorization: `Bearer ${serviceRoleKey}`,
@@ -348,15 +360,35 @@ export class BackupLogsService {
     });
 
     if (!response.ok) {
-      throw new NotFoundException('Khong the doc file dinh kem tu Supabase Storage');
+      throw new NotFoundException(errorMessage);
     }
 
     return Buffer.from(await response.arrayBuffer());
   }
 
   private async uploadStorageObject(path: string, content: Buffer, mimetype: string) {
+    return this.uploadObjectToBucket(
+      this.attachmentBucket,
+      path,
+      content,
+      mimetype,
+      'Khong the ghi file dinh kem len Supabase Storage',
+    );
+  }
+
+  private async uploadBackupObject(path: string, content: Buffer, mimetype: string) {
+    return this.uploadObjectToBucket(
+      this.backupBucket,
+      path,
+      content,
+      mimetype,
+      'Khong the ghi file backup len Supabase Storage',
+    );
+  }
+
+  private async uploadObjectToBucket(bucket: string, path: string, content: Buffer, mimetype: string, errorMessage: string) {
     const { url, serviceRoleKey } = this.getSupabaseConfig();
-    const response = await fetch(`${url}/storage/v1/object/${this.storageBucket}/${this.encodeStoragePath(path)}`, {
+    const response = await fetch(`${url}/storage/v1/object/${bucket}/${this.encodeStoragePath(path)}`, {
       method: 'POST',
       headers: {
         apikey: serviceRoleKey,
@@ -368,7 +400,58 @@ export class BackupLogsService {
     });
 
     if (!response.ok) {
-      throw new BadRequestException('Khong the ghi file dinh kem len Supabase Storage');
+      throw new BadRequestException(errorMessage);
+    }
+  }
+
+  private async deleteBackupObject(path: string) {
+    const { url, serviceRoleKey } = this.getSupabaseConfig();
+    const response = await fetch(`${url}/storage/v1/object/${this.backupBucket}/${this.encodeStoragePath(path)}`, {
+      method: 'DELETE',
+      headers: {
+        apikey: serviceRoleKey,
+        Authorization: `Bearer ${serviceRoleKey}`,
+      },
+    });
+
+    if (!response.ok && response.status !== 404) {
+      throw new BadRequestException('Khong the xoa file backup tren Supabase Storage');
+    }
+  }
+
+  private async cleanupExpiredBackups() {
+    if (!Number.isFinite(this.backupRetentionDays) || this.backupRetentionDays <= 0) return;
+
+    const cutoff = new Date(Date.now() - this.backupRetentionDays * 24 * 60 * 60 * 1000);
+    const expiredBackups = await this.prisma.backupLog.findMany({
+      where: {
+        action_type: 'backup',
+        created_at: { lt: cutoff },
+      },
+      select: {
+        backup_id: true,
+        file_path: true,
+      },
+    });
+
+    for (const backup of expiredBackups) {
+      await this.prisma.backupLog.delete({
+        where: { backup_id: backup.backup_id },
+      });
+
+      if (!backup.file_path) continue;
+
+      const remainingReferences = await this.prisma.backupLog.count({
+        where: { file_path: backup.file_path },
+      });
+
+      if (remainingReferences === 0) {
+        try {
+          await this.deleteBackupObject(backup.file_path);
+        } catch {
+          // Ignore storage cleanup errors to avoid blocking new backup creation.
+        }
+      }
     }
   }
 
