@@ -41,7 +41,7 @@ export default function App() {
         <Route path="/" element={<Navigate to={isAuthenticated ? '/dashboard' : '/public/meetings'} replace />} />
         <Route path="/public/meetings" element={<PublicMeetingsListPage />} />
         <Route path="/public/meetings/:id" element={<PublicMeetingDetailPage />} />
-        <Route path="/public/meetings/:id/print" element={<ProtectedRoute><PublicMeetingPrintPage /></ProtectedRoute>} />
+        <Route path="/public/meetings/:id/print" element={<PublicMeetingPrintPage />} />
         <Route
           path="/login"
           element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <LoginPage />}

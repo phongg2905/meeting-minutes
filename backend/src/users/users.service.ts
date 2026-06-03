@@ -1,9 +1,11 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { ActivityLogsService } from '../activity-logs/activity-logs.service';
+import { normalizeEmail, sanitizeUser } from './user-response.util';
+import { USER_STATUS_ACTIVE, USER_STATUSES } from './user.constants';
 
 @Injectable()
 export class UsersService {
@@ -37,7 +39,7 @@ export class UsersService {
       this.prisma.user.count({ where }),
     ]);
     return {
-      data: users.map(({ password_hash, ...user }) => user),
+      data: users.map((user) => sanitizeUser(user)),
       total,
       page,
       limit,
@@ -49,7 +51,7 @@ export class UsersService {
       include: { role: true },
       orderBy: { created_at: 'desc' },
     });
-    return users.map(({ password_hash, ...user }) => user);
+    return users.map((user) => sanitizeUser(user));
   }
 
   async findOne(id: number) {
@@ -57,45 +59,50 @@ export class UsersService {
       where: { user_id: id },
       include: { role: true },
     });
-    if (!user) throw new NotFoundException('Không tìm thấy người dùng');
+    if (!user) throw new NotFoundException('KhÃ´ng tÃ¬m tháº¥y ngÆ°á»i dÃ¹ng');
     return user;
   }
 
   async findOneSafe(id: number) {
     const user = await this.findOne(id);
-    const { password_hash, ...result } = user;
-    return result;
+    return sanitizeUser(user);
   }
 
   async findByEmail(email: string) {
     return this.prisma.user.findUnique({
-      where: { email },
+      where: { email: normalizeEmail(email) },
       include: { role: true },
     });
   }
 
   async create(dto: CreateUserDto, actorId: number) {
     const existing = await this.findByEmail(dto.email);
-    if (existing) throw new ConflictException('Email đã tồn tại');
+    if (existing) throw new ConflictException('Email Ä‘Ã£ tá»“n táº¡i');
+    await this.assertValidRoleId(dto.role_id);
+    this.assertValidStatus(dto.status);
+
     const hashed = await bcrypt.hash(dto.password, 10);
     const user = await this.prisma.user.create({
       data: {
         role_id: dto.role_id,
         full_name: dto.full_name,
-        email: dto.email,
+        email: normalizeEmail(dto.email),
         password_hash: hashed,
         phone: dto.phone,
-        status: dto.status || 'active',
+        status: dto.status || USER_STATUS_ACTIVE,
       },
       include: { role: true },
     });
-    const { password_hash, ...result } = user;
-    await this.activityLogs.log(actorId, 'CREATE', 'users', result.user_id, `Tạo người dùng: ${result.email}`);
+    const result = sanitizeUser(user);
+    await this.activityLogs.log(actorId, 'CREATE', 'users', result.user_id, `Táº¡o ngÆ°á»i dÃ¹ng: ${result.email}`);
     return result;
   }
 
   async update(id: number, dto: UpdateUserDto, actorId: number) {
     await this.findOne(id);
+    if (dto.role_id !== undefined) await this.assertValidRoleId(dto.role_id);
+    this.assertValidStatus(dto.status);
+
     const user = await this.prisma.user.update({
       where: { user_id: id },
       data: {
@@ -106,8 +113,8 @@ export class UsersService {
       },
       include: { role: true },
     });
-    const { password_hash, ...result } = user;
-    await this.activityLogs.log(actorId, 'UPDATE', 'users', id, `Cập nhật người dùng: ${result.email}`);
+    const result = sanitizeUser(user);
+    await this.activityLogs.log(actorId, 'UPDATE', 'users', id, `Cáº­p nháº­t ngÆ°á»i dÃ¹ng: ${result.email}`);
     return result;
   }
 
@@ -121,8 +128,8 @@ export class UsersService {
       },
       include: { role: true },
     });
-    const { password_hash, ...result } = user;
-    await this.activityLogs.log(id, 'UPDATE', 'users', id, `Cập nhật hồ sơ: ${result.email}`);
+    const result = sanitizeUser(user);
+    await this.activityLogs.log(id, 'UPDATE', 'users', id, `Cáº­p nháº­t há»“ sÆ¡: ${result.email}`);
     return result;
   }
 
@@ -136,17 +143,35 @@ export class UsersService {
   async remove(id: number, actorId: number) {
     const user = await this.findOne(id);
     const deleted = await this.prisma.user.delete({ where: { user_id: id } });
-    await this.activityLogs.log(actorId, 'DELETE', 'users', id, `Xóa nguoi dung: ${user.email}`);
-    return deleted;
+    await this.activityLogs.log(actorId, 'DELETE', 'users', id, `XÃ³a nguoi dung: ${user.email}`);
+    return sanitizeUser(deleted);
   }
 
   async updateStatus(id: number, status: string, actorId: number) {
+    this.assertValidStatus(status);
     const user = await this.findOne(id);
     const updated = await this.prisma.user.update({
       where: { user_id: id },
       data: { status },
     });
     await this.activityLogs.log(actorId, 'STATUS_CHANGE', 'users', id, `Doi trang thai nguoi dung ${user.email} -> ${status}`);
-    return updated;
+    return sanitizeUser(updated);
+  }
+
+  private async assertValidRoleId(roleId: number) {
+    const role = await this.prisma.role.findUnique({
+      where: { role_id: roleId },
+      select: { role_id: true },
+    });
+    if (!role) {
+      throw new BadRequestException('Vai trò người dùng không hợp lệ');
+    }
+  }
+
+  private assertValidStatus(status?: string) {
+    if (status === undefined) return;
+    if (!USER_STATUSES.includes(status as any)) {
+      throw new BadRequestException('Trạng thái người dùng không hợp lệ');
+    }
   }
 }

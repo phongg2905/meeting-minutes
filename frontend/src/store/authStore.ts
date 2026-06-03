@@ -2,6 +2,8 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { User } from '../types'
 
+const AUTH_STORAGE_KEY = 'auth-storage'
+
 interface AuthState {
   user: User | null
   token: string | null
@@ -11,25 +13,40 @@ interface AuthState {
   setUser: (user: User) => void
 }
 
+const initialAuthState = {
+  user: null,
+  token: null,
+  isAuthenticated: false,
+}
+
+export function clearAuthStorage() {
+  localStorage.removeItem('token')
+  localStorage.removeItem('user')
+  localStorage.removeItem(AUTH_STORAGE_KEY)
+}
+
 export const useAuthStore = create<AuthState>()(
   persist(
     (set) => ({
-      user: null,
-      token: null,
-      isAuthenticated: false,
+      ...initialAuthState,
       login: (token, user) => {
         localStorage.setItem('token', token)
         set({ token, user, isAuthenticated: true })
       },
       logout: () => {
-        localStorage.removeItem('token')
-        set({ token: null, user: null, isAuthenticated: false })
+        set({ ...initialAuthState })
+        clearAuthStorage()
       },
       setUser: (user) => set({ user }),
     }),
     {
-      name: 'auth-storage',
+      name: AUTH_STORAGE_KEY,
       partialize: (state) => ({ token: state.token, user: state.user, isAuthenticated: state.isAuthenticated }),
     }
   )
 )
+
+export function resetAuthState() {
+  useAuthStore.setState({ ...initialAuthState })
+  clearAuthStorage()
+}

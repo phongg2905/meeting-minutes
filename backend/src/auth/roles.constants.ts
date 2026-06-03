@@ -1,6 +1,11 @@
 export const ROLE_ADMIN = 1;
 export const ROLE_MINUTE_MANAGER = 2;
 export const ROLE_STANDARD_USER = 3;
+export const VALID_ROLE_IDS = [
+  ROLE_ADMIN,
+  ROLE_MINUTE_MANAGER,
+  ROLE_STANDARD_USER,
+] as const;
 
 export const MINUTE_STATUS_DRAFT = 'draft';
 export const MINUTE_STATUS_COMPLETED = 'completed';

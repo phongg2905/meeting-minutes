@@ -112,15 +112,17 @@ model MinuteParticipant {
 }
 
 model MinuteAttachment {
-  attachment_id Int           @id @default(autoincrement())
-  minute_id     Int
-  uploaded_by   Int
-  file_name     String        @db.VarChar(255)
-  file_path     String        @db.VarChar(255)
-  file_type     String?       @db.VarChar(50)
-  uploaded_at   DateTime      @default(now())
-  minute        MeetingMinute @relation(fields: [minute_id], references: [minute_id], onDelete: Cascade)
-  uploader      User          @relation(fields: [uploaded_by], references: [user_id])
+  attachment_id      Int           @id @default(autoincrement())
+  minute_id          Int
+  uploaded_by        Int
+  file_name          String        @db.VarChar(255)
+  file_path          String        @db.VarChar(255)
+  file_type          String?       @db.VarChar(50)
+  is_public_safe     Boolean       @default(false)
+  public_scan_status String        @default("pending") @db.VarChar(30)
+  uploaded_at        DateTime      @default(now())
+  minute             MeetingMinute @relation(fields: [minute_id], references: [minute_id], onDelete: Cascade)
+  uploader           User          @relation(fields: [uploaded_by], references: [user_id])
 
   @@map("minute_attachments")
 }

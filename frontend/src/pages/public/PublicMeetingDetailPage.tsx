@@ -4,14 +4,12 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { Breadcrumb, Button, Card, Descriptions, Empty, Space, Spin, Tag, Typography } from 'antd'
 import { ArrowLeftOutlined, PrinterOutlined } from '@ant-design/icons'
 import { STATUS_COLORS, STATUS_LABELS, formatDate, formatTime } from '../../utils'
-import { useAuthStore } from '../../store/authStore'
 
 const { Text, Title } = Typography
 
 export default function PublicMeetingDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const { isAuthenticated } = useAuthStore()
   const { data: minute, isLoading } = useQuery({
     queryKey: ['public-meeting', id],
     queryFn: () => publicMeetingMinutesService.getOne(Number(id)),
@@ -19,7 +17,7 @@ export default function PublicMeetingDetailPage() {
   })
 
   if (isLoading) return <div style={{ textAlign: 'center', padding: 80 }}><Spin size="large" /></div>
-  if (!minute) return <Empty description="Không tìm thấy biên bản công khai" />
+  if (!minute) return <Empty description="KhÃ´ng tÃ¬m tháº¥y biÃªn báº£n cÃ´ng khai" />
 
   return (
     <div style={{ minHeight: '100vh', background: '#f8fafc', padding: '24px 20px' }}>
@@ -27,7 +25,7 @@ export default function PublicMeetingDetailPage() {
         <Breadcrumb
           style={{ marginBottom: 16 }}
           items={[
-            { title: 'Tra cứu công khai' },
+            { title: 'Tra cá»©u cÃ´ng khai' },
             { title: minute.minute_code },
           ]}
         />
@@ -42,33 +40,31 @@ export default function PublicMeetingDetailPage() {
               </Space>
               <Title level={3} style={{ margin: '0 0 8px' }}>{minute.title}</Title>
               <Text type="secondary">
-                Lớp {minute.class_name} - {formatDate(minute.meeting_date)}
+                Lá»›p {minute.class_name} - {formatDate(minute.meeting_date)}
               </Text>
             </div>
             <Space wrap>
-              {isAuthenticated && (
-                <Button icon={<PrinterOutlined />} onClick={() => window.open(`/public/meetings/${id}/print`, '_blank')}>
-                  Xuất PDF
-                </Button>
-              )}
+              <Button icon={<PrinterOutlined />} onClick={() => window.open(`/public/meetings/${id}/print`, '_blank')}>
+                Xuáº¥t PDF
+              </Button>
               <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/public/meetings')}>
-                Quay lại
+                Quay láº¡i
               </Button>
             </Space>
           </div>
         </Card>
 
-        <Card title="Thông tin tóm tắt" style={{ marginBottom: 16 }}>
+        <Card title="ThÃ´ng tin tÃ³m táº¯t" style={{ marginBottom: 16 }}>
           <Descriptions bordered column={{ xs: 1, md: 2, lg: 3 }} size="small">
-            <Descriptions.Item label="Mã biên bản">{minute.minute_code}</Descriptions.Item>
-            <Descriptions.Item label="Loại biên bản">{minute.minute_type?.type_name}</Descriptions.Item>
-            <Descriptions.Item label="Tên lớp">{minute.class_name}</Descriptions.Item>
-            <Descriptions.Item label="Ngày họp">{formatDate(minute.meeting_date)}</Descriptions.Item>
-            <Descriptions.Item label="Giờ bắt đầu">{formatTime(minute.start_time)}</Descriptions.Item>
-            <Descriptions.Item label="Giờ kết thúc">{formatTime(minute.end_time)}</Descriptions.Item>
-            <Descriptions.Item label="Địa điểm">{minute.location || 'Không ghi'}</Descriptions.Item>
-            <Descriptions.Item label="Chủ tọa">{minute.host_name || 'Không ghi'}</Descriptions.Item>
-            <Descriptions.Item label="Thư ký">{minute.secretary_name || 'Không ghi'}</Descriptions.Item>
+            <Descriptions.Item label="MÃ£ biÃªn báº£n">{minute.minute_code}</Descriptions.Item>
+            <Descriptions.Item label="Loáº¡i biÃªn báº£n">{minute.minute_type?.type_name}</Descriptions.Item>
+            <Descriptions.Item label="TÃªn lá»›p">{minute.class_name}</Descriptions.Item>
+            <Descriptions.Item label="NgÃ y há»p">{formatDate(minute.meeting_date)}</Descriptions.Item>
+            <Descriptions.Item label="Giá» báº¯t Ä‘áº§u">{formatTime(minute.start_time)}</Descriptions.Item>
+            <Descriptions.Item label="Giá» káº¿t thÃºc">{formatTime(minute.end_time)}</Descriptions.Item>
+            <Descriptions.Item label="Äá»‹a Ä‘iá»ƒm">{minute.location || 'KhÃ´ng ghi'}</Descriptions.Item>
+            <Descriptions.Item label="Chá»§ tá»a">{minute.host_name || 'KhÃ´ng ghi'}</Descriptions.Item>
+            <Descriptions.Item label="ThÆ° kÃ½">{minute.secretary_name || 'KhÃ´ng ghi'}</Descriptions.Item>
           </Descriptions>
         </Card>
 

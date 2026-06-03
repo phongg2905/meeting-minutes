@@ -7,19 +7,19 @@ const baseMinute = {
   minute_code: 'BB-202605-0001',
   type_id: 1,
   created_by: 2,
-  title: 'Họp lớp thang 5',
+  title: 'Há»p lá»›p thang 5',
   class_name: 'CNTT01',
   meeting_date: new Date('2026-05-18'),
   start_time: new Date('1970-01-01T08:00:00'),
   end_time: new Date('1970-01-01T09:00:00'),
   location: 'A101',
-  meeting_form: 'Trực tiếp',
+  meeting_form: 'Trá»±c tiáº¿p',
   host_name: 'Nguyen Van A',
   secretary_name: 'Tran Thi B',
   attendee_summary: '30 sinh vien',
   absentee_summary: null,
   purpose: 'Sinh hoat lop',
-  discussion_content: 'Nội dung hop',
+  discussion_content: 'Ná»™i dung hop',
   conclusion_content: null,
   followup_summary: null,
   status: 'completed',
@@ -31,7 +31,32 @@ const baseMinute = {
   minute_type: { type_id: 1, type_name: 'Sinh hoat lop' },
   tasks: [],
   participants: [],
-  attachments: [],
+  attachments: [
+    {
+      attachment_id: 1,
+      minute_id: 10,
+      uploaded_by: 2,
+      file_name: 'public-safe.pdf',
+      file_path: 'minute-attachments/10/public-safe.pdf',
+      file_type: 'application/pdf',
+      is_public_safe: true,
+      public_scan_status: 'approved',
+      uploaded_at: new Date('2026-05-18T03:00:00Z'),
+      uploader: { user_id: 2, full_name: 'Creator' },
+    },
+    {
+      attachment_id: 2,
+      minute_id: 10,
+      uploaded_by: 2,
+      file_name: 'internal-only.pdf',
+      file_path: 'minute-attachments/10/internal-only.pdf',
+      file_type: 'application/pdf',
+      is_public_safe: false,
+      public_scan_status: 'pending',
+      uploaded_at: new Date('2026-05-18T04:00:00Z'),
+      uploader: { user_id: 2, full_name: 'Creator' },
+    },
+  ],
 };
 
 function createService(overrides: any = {}) {
@@ -58,31 +83,43 @@ function createService(overrides: any = {}) {
 }
 
 describe('MeetingMinutesService permissions', () => {
-  it('allows logged-in users to view a full public minute without approval status', async () => {
+  it('sanitizes internal fields for non-owner viewing a public minute', async () => {
     const { service } = createService();
 
-    await expect(service.findOne(10, 99, 4)).resolves.toMatchObject({
-      minute_id: 10,
-      discussion_content: 'Nội dung hop',
-      attachments: [],
+    const result = await service.findOne(10, 99, 3);
+
+    expect(result.creator).toEqual({
+      user_id: 2,
+      full_name: 'Creator',
     });
+    expect(result.attachments).toEqual([
+      expect.objectContaining({
+        attachment_id: 1,
+        file_name: 'public-safe.pdf',
+        is_public_safe: true,
+      }),
+    ]);
+    expect(result.attachments).toHaveLength(1);
+    expect(result.creator).not.toHaveProperty('email');
+    expect(result.attachments[0]).not.toHaveProperty('file_path');
+    expect(result.attachments[0]).not.toHaveProperty('uploaded_by');
   });
 
   it('blocks a minute manager from editing another creator minute', async () => {
     const { service } = createService();
 
-    await expect(service.update(10, { title: 'Sửa tiêu đề' }, 99, 2)).rejects.toBeInstanceOf(ForbiddenException);
+    await expect(service.update(10, { title: 'Sá»­a tiÃªu Ä‘á»' }, 99, 2)).rejects.toBeInstanceOf(ForbiddenException);
   });
 
   it('keeps a public minute public after content edit by its creator', async () => {
     const { service, prisma } = createService();
-    prisma.meetingMinute.update.mockResolvedValue({ ...baseMinute, title: 'Tiêu đề moi', is_public: true });
+    prisma.meetingMinute.update.mockResolvedValue({ ...baseMinute, title: 'TiÃªu Ä‘á» moi', is_public: true });
 
-    await service.update(10, { title: 'Tiêu đề moi' }, 2, 2);
+    await service.update(10, { title: 'TiÃªu Ä‘á» moi' }, 2, 2);
 
     expect(prisma.meetingMinute.update).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({
-        title: 'Tiêu đề moi',
+        title: 'TiÃªu Ä‘á» moi',
       }),
     }));
     expect(prisma.meetingMinute.update.mock.calls[0][0].data.status).toBeUndefined();
@@ -100,7 +137,7 @@ describe('MeetingMinutesService permissions', () => {
           participant_id: 31,
           minute_id: 10,
           full_name: 'Nguyen Van A',
-          role_in_meeting: 'Chủ tọa',
+          role_in_meeting: 'Chá»§ tá»a',
           attendance_status: 'present',
         } as any,
       ],
@@ -108,7 +145,7 @@ describe('MeetingMinutesService permissions', () => {
         {
           task_id: 15,
           minute_id: 10,
-          task_content: 'Tổng hop so lieu',
+          task_content: 'Tá»•ng hop so lieu',
           assigned_to: 'Tran Thi B',
           deadline: '2026-05-30',
           task_status: 'done',
@@ -123,7 +160,7 @@ describe('MeetingMinutesService permissions', () => {
             data: [
               {
                 full_name: 'Nguyen Van A',
-                role_in_meeting: 'Chủ tọa',
+                role_in_meeting: 'Chá»§ tá»a',
                 attendance_status: 'present',
               },
             ],
@@ -133,7 +170,7 @@ describe('MeetingMinutesService permissions', () => {
           createMany: {
             data: [
               {
-                task_content: 'Tổng hop so lieu',
+                task_content: 'Tá»•ng hop so lieu',
                 assigned_to: 'Tran Thi B',
                 deadline: new Date('2026-05-30'),
                 task_status: 'done',
@@ -161,7 +198,7 @@ describe('MeetingMinutesService permissions', () => {
     const { service, prisma } = createService();
     prisma.meetingMinute.findUnique.mockResolvedValue({ ...baseMinute, status: 'draft', is_public: true });
 
-    await expect(service.findOne(10, 99, 4)).rejects.toBeInstanceOf(ForbiddenException);
+    await expect(service.findOne(10, 99, 3)).rejects.toBeInstanceOf(ForbiddenException);
   });
 
   it('returns a clear error when a provided minute code is duplicated', async () => {
@@ -176,12 +213,12 @@ describe('MeetingMinutesService permissions', () => {
     await expect(service.create({
       minute_code: 'BB-DUP',
       type_id: 1,
-      title: 'Họp lớp',
+      title: 'Há»p lá»›p',
       class_name: 'CNTT01',
       meeting_date: '2026-05-18',
       start_time: '08:00',
       end_time: '09:00',
-      discussion_content: 'Nội dung',
+      discussion_content: 'Ná»™i dung',
     }, 2)).rejects.toThrow('Mã biên bản đã tồn tại');
   });
 

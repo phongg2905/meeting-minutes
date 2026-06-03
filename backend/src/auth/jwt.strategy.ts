@@ -3,6 +3,8 @@ import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
+import { USER_STATUS_ACTIVE } from '../users/user.constants';
+import { sanitizeUser } from '../users/user-response.util';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
@@ -19,10 +21,9 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       where: { user_id: payload.sub },
       include: { role: true },
     });
-    if (!user || user.status !== 'active') {
-      throw new UnauthorizedException('Tài khoản đã bị vô hiệu hóa');
+    if (!user || user.status !== USER_STATUS_ACTIVE) {
+      throw new UnauthorizedException('TÃ i khoáº£n Ä‘Ã£ bá»‹ vÃ´ hiá»‡u hÃ³a');
     }
-    const { password_hash, password_reset_code_hash, password_reset_expires_at, ...result } = user;
-    return result;
+    return sanitizeUser(user);
   }
 }
