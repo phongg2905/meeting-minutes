@@ -39,12 +39,13 @@ export interface MinuteParticipant {
 export interface MinuteAttachment {
   attachment_id: number
   minute_id: number
-  uploaded_by: number
   file_name: string
-  file_path: string
   file_type?: string
+  uploaded_by?: number
+  is_public_safe?: boolean
+  public_scan_status?: string
   uploaded_at: string
-  uploader?: { full_name: string }
+  uploader?: { user_id?: number; full_name: string }
 }
 
 export interface MeetingMinute {
@@ -77,7 +78,7 @@ export interface MeetingMinute {
   is_public: boolean
   published_at?: string
   minute_type?: MinuteType
-  creator?: { user_id: number; full_name: string; email?: string }
+  creator?: { user_id: number; full_name: string }
   tasks?: MinuteTask[]
   participants?: MinuteParticipant[]
   attachments?: MinuteAttachment[]
