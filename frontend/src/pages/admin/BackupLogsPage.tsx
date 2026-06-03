@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { backupLogsService } from '../../services'
-import { Button, Card, DatePicker, Input, Popconfirm, Select, Space, Table, Tag, Typography, message } from 'antd'
-import { DatabaseOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons'
+import { Button, Card, DatePicker, Input, Popconfirm, Select, Space, Table, Tag, Tooltip, Typography, message } from 'antd'
+import { DatabaseOutlined, DeleteOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons'
 import { formatDateTime } from '../../utils'
 
 const { Text } = Typography
@@ -45,6 +45,15 @@ export default function BackupLogsPage() {
     onError: (err: any) => message.error(err?.response?.data?.message || 'Không thể khôi phục dữ liệu'),
   })
 
+  const deleteMutation = useMutation({
+    mutationFn: (backupId: number) => backupLogsService.remove(backupId),
+    onSuccess: () => {
+      message.success('Xóa bản ghi backup thành công')
+      queryClient.invalidateQueries({ queryKey: ['backup-logs'] })
+    },
+    onError: (err: any) => message.error(err?.response?.data?.message || 'Không thể xóa bản ghi backup'),
+  })
+
   const columns = [
     {
       title: 'Loại thao tác',
@@ -56,19 +65,19 @@ export default function BackupLogsPage() {
       title: 'Tệp',
       dataIndex: 'file_name',
       key: 'file_name',
-      render: (value: string) => value || '—',
+      render: (value: string) => value || '-',
     },
     {
       title: 'Đường dẫn',
       dataIndex: 'file_path',
       key: 'file_path',
       ellipsis: true,
-      render: (value: string) => value || '—',
+      render: (value: string) => value || '-',
     },
     {
       title: 'Người thực hiện',
       key: 'performer',
-      render: (_: any, record: any) => record.performer?.full_name || '—',
+      render: (_: any, record: any) => record.performer?.full_name || '-',
     },
     {
       title: 'Thời gian',
@@ -80,18 +89,40 @@ export default function BackupLogsPage() {
       title: 'Thao tác',
       key: 'actions',
       render: (_: any, record: any) => (
-        record.action_type === 'backup' ? (
-          <Popconfirm
-            title="Khôi phục từ bản backup này?"
-            description="Dữ liệu hiện tại sẽ bị ghi đè bởi bản sao lưu đã chọn."
-            onConfirm={() => restoreMutation.mutate(record.backup_id)}
-            okText="Khôi phục"
-            cancelText="Hủy"
-          >
-            <Button icon={<ReloadOutlined />} loading={restoreMutation.isPending}>
-              Khôi phục
-            </Button>
-          </Popconfirm>
+        record.file_path ? (
+          <Space>
+            <Popconfirm
+              title="Khôi phục từ bản ghi này?"
+              description="Dữ liệu hiện tại sẽ bị ghi đè bởi bản sao lưu đã chọn."
+              onConfirm={() => restoreMutation.mutate(record.backup_id)}
+              okText="Khôi phục"
+              cancelText="Hủy"
+            >
+              <Tooltip title="Khôi phục">
+                <Button
+                  icon={<ReloadOutlined />}
+                  loading={restoreMutation.isPending}
+                  aria-label="Khôi phục"
+                />
+              </Tooltip>
+            </Popconfirm>
+            <Popconfirm
+              title="Xóa bản ghi này?"
+              description="Nếu không còn bản ghi nào khác tham chiếu cùng file, file backup sẽ bị xóa khỏi ổ đĩa."
+              onConfirm={() => deleteMutation.mutate(record.backup_id)}
+              okText="Xóa"
+              cancelText="Hủy"
+            >
+              <Tooltip title="Xóa">
+                <Button
+                  danger
+                  icon={<DeleteOutlined />}
+                  loading={deleteMutation.isPending}
+                  aria-label="Xóa"
+                />
+              </Tooltip>
+            </Popconfirm>
+          </Space>
         ) : null
       ),
     },

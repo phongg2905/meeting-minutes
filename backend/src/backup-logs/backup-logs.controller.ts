@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Query, Request, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Query, Request, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { BackupLogsService } from './backup-logs.service';
 import { JwtAuthGuard, Roles, RolesGuard } from '../auth/jwt-auth.guard';
@@ -31,5 +31,10 @@ export class BackupLogsController {
   @Post('restore')
   restore(@Request() req, @Body() dto: RestoreBackupDto) {
     return this.service.restore(req.user.user_id, dto);
+  }
+
+  @Delete(':id')
+  remove(@Request() req, @Param('id') id: string) {
+    return this.service.remove(req.user.user_id, Number(id));
   }
 }

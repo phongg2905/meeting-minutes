@@ -14,16 +14,57 @@ export class ManagerRoleRequestsService {
     private notifications: NotificationsService,
   ) {}
 
+  private getInclude() {
+    return {
+      user: { select: { user_id: true, full_name: true, email: true, status: true, role: true } },
+      reviewer: { select: { user_id: true, full_name: true, email: true } },
+    };
+  }
+
   findAll(roleId: number, userId: number) {
     const where = isSystemAdmin(roleId) ? {} : { user_id: userId };
     return this.prisma.managerRoleRequest.findMany({
       where,
-      include: {
-        user: { select: { user_id: true, full_name: true, email: true, status: true, role: true } },
-        reviewer: { select: { user_id: true, full_name: true, email: true } },
-      },
+      include: this.getInclude(),
       orderBy: { created_at: 'desc' },
     });
+  }
+
+  findPending(roleId: number, userId: number) {
+    const where = isSystemAdmin(roleId)
+      ? { status: 'pending' }
+      : { user_id: userId, status: 'pending' };
+    return this.prisma.managerRoleRequest.findMany({
+      where,
+      include: this.getInclude(),
+      orderBy: { created_at: 'desc' },
+    });
+  }
+
+  findHistory(roleId: number, userId: number) {
+    const where = isSystemAdmin(roleId)
+      ? { status: { in: ['approved', 'rejected'] } }
+      : { user_id: userId, status: { in: ['approved', 'rejected'] } };
+    return this.prisma.managerRoleRequest.findMany({
+      where,
+      include: this.getInclude(),
+      orderBy: [
+        { updated_at: 'desc' },
+        { created_at: 'desc' },
+      ],
+    });
+  }
+
+  async findOne(id: number, roleId: number, userId: number) {
+    const request = await this.prisma.managerRoleRequest.findUnique({
+      where: { request_id: id },
+      include: this.getInclude(),
+    });
+    if (!request) throw new NotFoundException('KhÃ´ng tÃ¬m tháº¥y yÃªu cáº§u');
+    if (!isSystemAdmin(roleId) && request.user_id !== userId) {
+      throw new ForbiddenException('Báº¡n khÃ´ng cÃ³ quyá»n xem yÃªu cáº§u nÃ y');
+    }
+    return request;
   }
 
   async create(userId: number, dto: CreateManagerRoleRequestDto) {
@@ -72,6 +113,7 @@ export class ManagerRoleRequestsService {
           status: dto.status,
           response: dto.response,
           reviewed_by: adminId,
+          updated_at: new Date(),
         },
       });
       if (dto.status === 'approved') {
