@@ -1,4 +1,4 @@
-﻿import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ActivityLogsService } from '../activity-logs/activity-logs.service';
@@ -16,6 +16,9 @@ import {
   isPublicMinute,
   isSystemAdmin,
 } from '../auth/roles.constants';
+import { USER_STATUS_ACTIVE } from '../users/user.constants';
+
+type MinuteViewScope = 'owner' | 'authenticated_public' | 'public';
 
 @Injectable()
 export class MeetingMinutesService {
@@ -30,7 +33,7 @@ export class MeetingMinutesService {
     if (!isSystemAdmin(roleId)) {
       where.OR = [
         ...(canWriteMinutes(roleId) ? [{ created_by: userId }] : []),
-        { status: MINUTE_STATUS_COMPLETED, is_public: true, creator: { status: 'active' } },
+        { status: MINUTE_STATUS_COMPLETED, is_public: true, creator: { status: USER_STATUS_ACTIVE } },
       ];
     }
     this.applyFilters(where, query);
@@ -40,7 +43,8 @@ export class MeetingMinutesService {
         where,
         include: {
           minute_type: true,
-          creator: { select: { user_id: true, full_name: true } },
+          creator: { select: { user_id: true, full_name: true, status: true } },
+          attachments: { select: { is_public_safe: true } },
           _count: { select: { tasks: true, participants: true, attachments: true } },
         },
         orderBy: { created_at: 'desc' },
@@ -50,11 +54,19 @@ export class MeetingMinutesService {
       this.prisma.meetingMinute.count({ where }),
     ]);
 
-    return { data, total, page: Number(query.page) || 1, limit: Number(query.limit) || 10 };
+    return {
+      data: data.map((minute) => {
+        const scope = isSystemAdmin(roleId) || minute.created_by === userId ? 'owner' : 'authenticated_public';
+        return this.toListItem(minute, scope);
+      }),
+      total,
+      page: Number(query.page) || 1,
+      limit: Number(query.limit) || 10,
+    };
   }
 
   async findPublic(query: QueryMeetingMinuteDto) {
-    const where: any = { status: MINUTE_STATUS_COMPLETED, is_public: true, creator: { status: 'active' } };
+    const where: any = { status: MINUTE_STATUS_COMPLETED, is_public: true, creator: { status: USER_STATUS_ACTIVE } };
     this.applyFilters(where, query, true);
 
     const [data, total] = await Promise.all([
@@ -63,6 +75,7 @@ export class MeetingMinutesService {
         include: {
           minute_type: true,
           creator: { select: { user_id: true, full_name: true } },
+          attachments: { select: { is_public_safe: true } },
           _count: { select: { tasks: true, participants: true, attachments: true } },
         },
         orderBy: { meeting_date: 'desc' },
@@ -72,7 +85,12 @@ export class MeetingMinutesService {
       this.prisma.meetingMinute.count({ where }),
     ]);
 
-    return { data, total, page: Number(query.page) || 1, limit: Number(query.limit) || 10 };
+    return {
+      data: data.map((minute) => this.toListItem(minute, 'public')),
+      total,
+      page: Number(query.page) || 1,
+      limit: Number(query.limit) || 10,
+    };
   }
 
   async findOne(id: number, userId: number, roleId: number) {
@@ -90,12 +108,10 @@ export class MeetingMinutesService {
       },
     });
     if (!minute) throw new NotFoundException('Không tìm thấy biên bản');
-    const creatorInactive = minute.creator && (minute.creator as any).status === 'inactive';
-    if (!isSystemAdmin(roleId) && creatorInactive) throw new NotFoundException('Không tìm thấy biên bản');
-    if (!isSystemAdmin(roleId) && minute.created_by !== userId && !this.isVisibleToNonOwner(minute)) {
-      throw new ForbiddenException('Bạn không có quyền xem biên bản này');
-    }
-    return minute;
+
+    const scope = this.resolveDetailScope(minute, userId, roleId);
+    if (scope === 'owner') return this.toOwnerDetail(minute);
+    return this.toAuthenticatedPublicDetail(minute);
   }
 
   async findPublicOne(id: number) {
@@ -112,7 +128,7 @@ export class MeetingMinutesService {
         },
       },
     });
-    if (!minute || !this.isVisibleToNonOwner(minute) || (minute.creator as any)?.status !== 'active') {
+    if (!minute || !this.isPubliclyVisible(minute)) {
       throw new NotFoundException('Không tìm thấy biên bản công khai');
     }
     return this.toPublicDetail(minute);
@@ -352,7 +368,18 @@ export class MeetingMinutesService {
     }
   }
 
-  private toPublicSummary(minute: any) {
+  private toListItem(minute: any, scope: MinuteViewScope) {
+    const safeCreator = minute.creator
+      ? {
+          user_id: minute.creator.user_id,
+          full_name: minute.creator.full_name,
+        }
+      : undefined;
+
+    const safeAttachmentCount = Array.isArray(minute.attachments)
+      ? minute.attachments.filter((attachment: any) => attachment.is_public_safe).length
+      : minute._count?.attachments;
+
     return {
       minute_id: minute.minute_id,
       minute_code: minute.minute_code,
@@ -370,15 +397,30 @@ export class MeetingMinutesService {
       created_at: minute.created_at,
       updated_at: minute.updated_at,
       minute_type: minute.minute_type,
-      creator: minute.creator ? { user_id: minute.creator.user_id, full_name: minute.creator.full_name } : undefined,
+      creator: safeCreator,
+      _count: minute._count ? {
+        tasks: minute._count.tasks,
+        participants: minute._count.participants,
+        attachments: scope === 'owner' ? minute._count.attachments : safeAttachmentCount,
+      } : undefined,
     };
   }
 
-  private toPublicDetail(minute: any) {
+  private toOwnerDetail(minute: any) {
     return {
-      ...this.toPublicSummary(minute),
+      minute_id: minute.minute_id,
+      minute_code: minute.minute_code,
       type_id: minute.type_id,
+      created_by: minute.created_by,
+      title: minute.title,
+      class_name: minute.class_name,
+      meeting_date: minute.meeting_date,
+      start_time: minute.start_time,
+      end_time: minute.end_time,
+      location: minute.location,
       meeting_form: minute.meeting_form,
+      host_name: minute.host_name,
+      secretary_name: minute.secretary_name,
       attendee_summary: minute.attendee_summary,
       absentee_summary: minute.absentee_summary,
       purpose: minute.purpose,
@@ -386,9 +428,86 @@ export class MeetingMinutesService {
       conclusion_content: minute.conclusion_content,
       followup_summary: minute.followup_summary,
       template_data: minute.template_data,
+      status: minute.status,
+      reviewed_by: minute.reviewed_by,
+      reviewed_at: minute.reviewed_at,
+      review_note: minute.review_note,
+      created_at: minute.created_at,
+      updated_at: minute.updated_at,
+      is_public: minute.is_public,
+      published_at: minute.published_at,
+      minute_type: minute.minute_type,
+      creator: minute.creator
+        ? {
+            user_id: minute.creator.user_id,
+            full_name: minute.creator.full_name,
+          }
+        : undefined,
+      tasks: minute.tasks,
+      participants: minute.participants,
+      attachments: (minute.attachments || []).map((attachment: any) => this.toOwnerAttachment(attachment)),
+    };
+  }
+
+  private toAuthenticatedPublicDetail(minute: any) {
+    return this.toPublicDetail(minute);
+  }
+
+  private toPublicDetail(minute: any) {
+    return {
+      minute_id: minute.minute_id,
+      minute_code: minute.minute_code,
+      type_id: minute.type_id,
+      created_by: minute.created_by,
+      title: minute.title,
+      class_name: minute.class_name,
+      meeting_date: minute.meeting_date,
+      start_time: minute.start_time,
+      end_time: minute.end_time,
+      location: minute.location,
+      meeting_form: minute.meeting_form,
+      host_name: minute.host_name,
+      secretary_name: minute.secretary_name,
+      attendee_summary: minute.attendee_summary,
+      absentee_summary: minute.absentee_summary,
+      purpose: minute.purpose,
+      discussion_content: minute.discussion_content,
+      conclusion_content: minute.conclusion_content,
+      followup_summary: minute.followup_summary,
+      template_data: minute.template_data,
+      status: minute.status,
+      created_at: minute.created_at,
+      updated_at: minute.updated_at,
+      is_public: minute.is_public,
+      published_at: minute.published_at,
+      minute_type: minute.minute_type,
+      creator: minute.creator
+        ? {
+            user_id: minute.creator.user_id,
+            full_name: minute.creator.full_name,
+          }
+        : undefined,
       participants: minute.participants,
       tasks: minute.tasks,
-      attachments: minute.attachments,
+      attachments: (minute.attachments || [])
+        .filter((attachment: any) => attachment.is_public_safe)
+        .map((attachment: any) => this.toPublicAttachment(attachment)),
+    };
+  }
+
+  private toOwnerAttachment(attachment: any) {
+    const { file_path, ...safeAttachment } = attachment;
+    return safeAttachment;
+  }
+
+  private toPublicAttachment(attachment: any) {
+    return {
+      attachment_id: attachment.attachment_id,
+      minute_id: attachment.minute_id,
+      file_name: attachment.file_name,
+      file_type: attachment.file_type,
+      is_public_safe: attachment.is_public_safe,
+      uploaded_at: attachment.uploaded_at,
     };
   }
 
@@ -426,6 +545,23 @@ export class MeetingMinutesService {
 
   private isVisibleToNonOwner(minute: { status?: string; is_public?: boolean }) {
     return minute.status === MINUTE_STATUS_COMPLETED && isPublicMinute(minute);
+  }
+
+  private isPubliclyVisible(minute: { status?: string; is_public?: boolean; creator?: { status?: string | null } | null }) {
+    return this.isVisibleToNonOwner(minute) && (minute.creator?.status ?? USER_STATUS_ACTIVE) === USER_STATUS_ACTIVE;
+  }
+
+  private resolveDetailScope(
+    minute: { created_by: number; status?: string; is_public?: boolean; creator?: { status?: string | null } | null },
+    userId: number,
+    roleId: number,
+  ): MinuteViewScope {
+    const creatorInactive = minute.creator && minute.creator.status !== USER_STATUS_ACTIVE;
+    if (isSystemAdmin(roleId)) return 'owner';
+    if (creatorInactive) throw new NotFoundException('Không tìm thấy biên bản');
+    if (minute.created_by === userId) return 'owner';
+    if (this.isVisibleToNonOwner(minute)) return 'authenticated_public';
+    throw new ForbiddenException('Bạn không có quyền xem biên bản này');
   }
 
   private toParticipantCreateData(participants: any[]) {
@@ -479,4 +615,3 @@ export class MeetingMinutesService {
     }
   }
 }
-
