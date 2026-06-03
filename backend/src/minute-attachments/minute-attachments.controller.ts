@@ -1,10 +1,11 @@
-import { Controller, Delete, Get, Param, ParseIntPipe, Post, Request, Res, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Request, Res, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
 import { ApiBearerAuth, ApiConsumes, ApiTags } from '@nestjs/swagger';
 import { MinuteAttachmentsService } from './minute-attachments.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import type { Response } from 'express';
+import { UpdateMinuteAttachmentVisibilityDto } from './dto/update-minute-attachment-visibility.dto';
 
 @ApiTags('Minute Attachments')
 @ApiBearerAuth()
@@ -27,6 +28,15 @@ export class MinuteAttachmentsController {
     @UploadedFile() file: any,
   ) {
     return this.service.create(id, req.user.user_id, req.user.role_id, file);
+  }
+
+  @Patch(':id/public-safe')
+  updatePublicSafety(
+    @Param('id', ParseIntPipe) id: number,
+    @Request() req,
+    @Body() dto: UpdateMinuteAttachmentVisibilityDto,
+  ) {
+    return this.service.updatePublicSafety(id, req.user.user_id, req.user.role_id, dto.is_public_safe);
   }
 
   @Get(':id/download')
