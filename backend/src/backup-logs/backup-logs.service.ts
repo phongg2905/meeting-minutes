@@ -51,7 +51,7 @@ export class BackupLogsService {
 
   async create(userId: number, data: CreateBackupLogDto) {
     const created = await this.prisma.backupLog.create({ data: { ...data, performed_by: userId } });
-    await this.activityLogs.log(userId, 'CREATE', 'backup_logs', created.backup_id, `Ghi nhận ${data.action_type}`);
+    await this.activityLogs.log(userId, 'CREATE', 'backup_logs', created.backup_id, `Ghi nhan ${data.action_type}`);
     return created;
   }
 
@@ -129,20 +129,20 @@ export class BackupLogsService {
         file_path: filePath,
       },
     });
-    await this.activityLogs.log(userId, 'BACKUP', 'backup_logs', log.backup_id, `Tạo backup: ${fileName}`);
+    await this.activityLogs.log(userId, 'BACKUP', 'backup_logs', log.backup_id, `Tao backup: ${fileName}`);
     return log;
   }
 
   async restore(userId: number, dto: RestoreBackupDto) {
     if (dto.confirmation !== 'RESTORE') {
-      throw new BadRequestException('Vui lòng nhập RESTORE để xác nhận khôi phục dữ liệu');
+      throw new BadRequestException('Vui long nhap RESTORE de xac nhan khoi phuc du lieu');
     }
 
     const backup = await this.prisma.backupLog.findUnique({
       where: { backup_id: dto.backup_id },
     });
-    if (!backup || backup.action_type !== 'backup' || !backup.file_path) {
-      throw new NotFoundException('Không tìm thấy bản sao lưu hợp lệ');
+    if (!backup || !backup.file_path) {
+      throw new NotFoundException('Khong tim thay ban sao luu hop le');
     }
 
     const raw = await fs.readFile(backup.file_path, 'utf-8');
@@ -150,85 +150,91 @@ export class BackupLogsService {
     this.validateBackupPayload(parsed);
     const data = parsed.data;
 
-    await this.prisma.$transaction(async (tx) => {
-      await tx.minuteAttachment.deleteMany();
-      await tx.minuteParticipant.deleteMany();
-      await tx.minuteTask.deleteMany();
-      await tx.supportRequest.deleteMany();
-      await tx.managerRoleRequest.deleteMany();
-      await tx.activityLog.deleteMany();
-      await tx.backupLog.deleteMany();
-      await tx.meetingMinute.deleteMany();
-      await tx.user.deleteMany();
-      await tx.minuteType.deleteMany();
-      await tx.role.deleteMany();
+    const users = data.users?.map((item: any) => ({
+      ...item,
+      created_at: new Date(item.created_at),
+      updated_at: item.updated_at ? new Date(item.updated_at) : null,
+    })) ?? [];
 
-      if (data.roles?.length) await tx.role.createMany({ data: data.roles });
-      if (data.minuteTypes?.length) await tx.minuteType.createMany({ data: data.minuteTypes });
-      if (data.users?.length) await tx.user.createMany({
-        data: data.users.map((item: any) => ({
-          ...item,
-          created_at: new Date(item.created_at),
-          updated_at: item.updated_at ? new Date(item.updated_at) : null,
-        })),
-      });
-      if (data.meetingMinutes?.length) await tx.meetingMinute.createMany({
-        data: data.meetingMinutes.map((item: any) => ({
-          ...item,
-          meeting_date: new Date(item.meeting_date),
-          start_time: new Date(item.start_time),
-          end_time: new Date(item.end_time),
-          reviewed_at: item.reviewed_at ? new Date(item.reviewed_at) : null,
-          published_at: item.published_at ? new Date(item.published_at) : null,
-          created_at: new Date(item.created_at),
-          updated_at: item.updated_at ? new Date(item.updated_at) : null,
-        })),
-      });
-      if (data.minuteTasks?.length) await tx.minuteTask.createMany({
-        data: data.minuteTasks.map((item: any) => ({
-          ...item,
-          deadline: item.deadline ? new Date(item.deadline) : null,
-        })),
-      });
-      if (data.minuteParticipants?.length) await tx.minuteParticipant.createMany({ data: data.minuteParticipants });
-      if (data.minuteAttachments?.length) await tx.minuteAttachment.createMany({
-        data: data.minuteAttachments.map((item: any) => ({
-          attachment_id: item.attachment_id,
-          minute_id: item.minute_id,
-          uploaded_by: item.uploaded_by,
-          file_name: item.file_name,
-          file_path: item.file_path,
-          file_type: item.file_type,
-          uploaded_at: new Date(item.uploaded_at),
-        })),
-      });
-      if (data.supportRequests?.length) await tx.supportRequest.createMany({
-        data: data.supportRequests.map((item: any) => ({
-          ...item,
-          created_at: new Date(item.created_at),
-          updated_at: item.updated_at ? new Date(item.updated_at) : null,
-        })),
-      });
-      if (data.managerRoleRequests?.length) await tx.managerRoleRequest.createMany({
-        data: data.managerRoleRequests.map((item: any) => ({
-          ...item,
-          created_at: new Date(item.created_at),
-          updated_at: item.updated_at ? new Date(item.updated_at) : null,
-        })),
-      });
-      if (data.activityLogs?.length) await tx.activityLog.createMany({
-        data: data.activityLogs.map((item: any) => ({
-          ...item,
-          created_at: new Date(item.created_at),
-        })),
-      });
-      if (data.backupLogs?.length) await tx.backupLog.createMany({
-        data: data.backupLogs.map((item: any) => ({
-          ...item,
-          created_at: new Date(item.created_at),
-        })),
-      });
-    });
+    const meetingMinutes = data.meetingMinutes?.map((item: any) => ({
+      ...item,
+      meeting_date: new Date(item.meeting_date),
+      start_time: new Date(item.start_time),
+      end_time: new Date(item.end_time),
+      reviewed_at: item.reviewed_at ? new Date(item.reviewed_at) : null,
+      published_at: item.published_at ? new Date(item.published_at) : null,
+      created_at: new Date(item.created_at),
+      updated_at: item.updated_at ? new Date(item.updated_at) : null,
+    })) ?? [];
+
+    const minuteTasks = data.minuteTasks?.map((item: any) => ({
+      ...item,
+      deadline: item.deadline ? new Date(item.deadline) : null,
+    })) ?? [];
+
+    const minuteAttachments = data.minuteAttachments?.map((item: any) => ({
+      attachment_id: item.attachment_id,
+      minute_id: item.minute_id,
+      uploaded_by: item.uploaded_by,
+      file_name: item.file_name,
+      file_path: item.file_path,
+      file_type: item.file_type,
+      uploaded_at: new Date(item.uploaded_at),
+    })) ?? [];
+
+    const supportRequests = data.supportRequests?.map((item: any) => ({
+      ...item,
+      created_at: new Date(item.created_at),
+      updated_at: item.updated_at ? new Date(item.updated_at) : null,
+    })) ?? [];
+
+    const managerRoleRequests = data.managerRoleRequests?.map((item: any) => ({
+      ...item,
+      created_at: new Date(item.created_at),
+      updated_at: item.updated_at ? new Date(item.updated_at) : null,
+    })) ?? [];
+
+    const activityLogs = data.activityLogs?.map((item: any) => ({
+      ...item,
+      created_at: new Date(item.created_at),
+    })) ?? [];
+
+    const backupLogs = data.backupLogs?.map((item: any) => ({
+      ...item,
+      created_at: new Date(item.created_at),
+    })) ?? [];
+
+    const queries: any[] = [
+      this.prisma.minuteAttachment.deleteMany(),
+      this.prisma.minuteParticipant.deleteMany(),
+      this.prisma.minuteTask.deleteMany(),
+      this.prisma.supportRequest.deleteMany(),
+      this.prisma.managerRoleRequest.deleteMany(),
+      this.prisma.activityLog.deleteMany(),
+      this.prisma.backupLog.deleteMany(),
+      this.prisma.meetingMinute.deleteMany(),
+      this.prisma.user.deleteMany(),
+      this.prisma.minuteType.deleteMany(),
+      this.prisma.role.deleteMany(),
+    ];
+
+    if (data.roles?.length) queries.push(this.prisma.role.createMany({ data: data.roles }));
+    if (data.minuteTypes?.length) queries.push(this.prisma.minuteType.createMany({ data: data.minuteTypes }));
+    if (users.length) queries.push(this.prisma.user.createMany({ data: users }));
+    if (meetingMinutes.length) queries.push(this.prisma.meetingMinute.createMany({ data: meetingMinutes }));
+    if (minuteTasks.length) queries.push(this.prisma.minuteTask.createMany({ data: minuteTasks }));
+    if (data.minuteParticipants?.length) {
+      queries.push(this.prisma.minuteParticipant.createMany({ data: data.minuteParticipants }));
+    }
+    if (minuteAttachments.length) queries.push(this.prisma.minuteAttachment.createMany({ data: minuteAttachments }));
+    if (supportRequests.length) queries.push(this.prisma.supportRequest.createMany({ data: supportRequests }));
+    if (managerRoleRequests.length) {
+      queries.push(this.prisma.managerRoleRequest.createMany({ data: managerRoleRequests }));
+    }
+    if (activityLogs.length) queries.push(this.prisma.activityLog.createMany({ data: activityLogs }));
+    if (backupLogs.length) queries.push(this.prisma.backupLog.createMany({ data: backupLogs }));
+
+    await this.prisma.$transaction(queries);
 
     if (data.minuteAttachments?.length) {
       await Promise.all(
@@ -245,21 +251,90 @@ export class BackupLogsService {
 
     await this.resetSequences();
 
-    const restoreLog = await this.prisma.backupLog.create({
-      data: {
+    const existingSourceBackup = await this.prisma.backupLog.findFirst({
+      where: {
+        action_type: 'backup',
+        file_path: backup.file_path,
+      },
+    });
+
+    if (!existingSourceBackup) {
+      await this.prisma.backupLog.create({
+        data: {
+          performed_by: backup.performed_by,
+          action_type: 'backup',
+          file_name: backup.file_name,
+          file_path: backup.file_path,
+          created_at: backup.created_at,
+        },
+      });
+    }
+
+    let restoreLog: any;
+    try {
+      restoreLog = await this.prisma.backupLog.create({
+        data: {
+          performed_by: userId,
+          action_type: 'restore',
+          file_name: backup.file_name,
+          file_path: backup.file_path,
+        },
+      });
+      await this.activityLogs.log(
+        userId,
+        'RESTORE',
+        'backup_logs',
+        restoreLog.backup_id,
+        `Khoi phuc tu backup: ${backup.file_name}`,
+      );
+    } catch {
+      restoreLog = {
+        backup_id: backup.backup_id,
         performed_by: userId,
         action_type: 'restore',
         file_name: backup.file_name,
         file_path: backup.file_path,
-      },
-    });
-    await this.activityLogs.log(userId, 'RESTORE', 'backup_logs', restoreLog.backup_id, `Khôi phục từ backup: ${backup.file_name}`);
+        created_at: new Date(),
+      };
+    }
+
     return restoreLog;
+  }
+
+  async remove(userId: number, backupId: number) {
+    const log = await this.prisma.backupLog.findUnique({
+      where: { backup_id: backupId },
+    });
+
+    if (!log) {
+      throw new NotFoundException('Khong tim thay ban ghi backup');
+    }
+
+    await this.prisma.backupLog.delete({
+      where: { backup_id: backupId },
+    });
+
+    if (log.action_type === 'backup' && log.file_path) {
+      const remainingReferences = await this.prisma.backupLog.count({
+        where: { file_path: log.file_path },
+      });
+
+      if (remainingReferences === 0) {
+        try {
+          await fs.unlink(log.file_path);
+        } catch {
+          // Ignore missing file errors so DB state remains source of truth.
+        }
+      }
+    }
+
+    await this.activityLogs.log(userId, 'DELETE', 'backup_logs', backupId, `Xoa ban ghi backup: ${log.file_name || backupId}`);
+    return { success: true };
   }
 
   private assertBackupEncryptionReady() {
     if (process.env.NODE_ENV === 'production' && !process.env.BACKUP_ENCRYPTION_KEY) {
-      throw new BadRequestException('Chưa cấu hình BACKUP_ENCRYPTION_KEY để mã hóa backup');
+      throw new BadRequestException('Chua cau hinh BACKUP_ENCRYPTION_KEY de ma hoa backup');
     }
   }
 
@@ -273,7 +348,7 @@ export class BackupLogsService {
     });
 
     if (!response.ok) {
-      throw new NotFoundException('Không thể đọc file đính kèm từ Supabase Storage');
+      throw new NotFoundException('Khong the doc file dinh kem tu Supabase Storage');
     }
 
     return Buffer.from(await response.arrayBuffer());
@@ -293,7 +368,7 @@ export class BackupLogsService {
     });
 
     if (!response.ok) {
-      throw new BadRequestException('Không thể ghi file đính kèm lên Supabase Storage');
+      throw new BadRequestException('Khong the ghi file dinh kem len Supabase Storage');
     }
   }
 
@@ -301,7 +376,7 @@ export class BackupLogsService {
     const url = process.env.SUPABASE_URL?.replace(/\/$/, '');
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
     if (!url || !serviceRoleKey) {
-      throw new BadRequestException('Chưa cấu hình SUPABASE_URL hoặc SUPABASE_SERVICE_ROLE_KEY để xử lý file backup');
+      throw new BadRequestException('Chua cau hinh SUPABASE_URL hoac SUPABASE_SERVICE_ROLE_KEY de xu ly file backup');
     }
     return { url, serviceRoleKey };
   }
@@ -334,7 +409,7 @@ export class BackupLogsService {
     if (!payload?.encrypted) return payload;
     const key = this.getBackupEncryptionKey();
     if (!key) {
-      throw new BadRequestException('Backup đã được mã hóa nhưng chưa cấu hình BACKUP_ENCRYPTION_KEY');
+      throw new BadRequestException('Backup da duoc ma hoa nhung chua cau hinh BACKUP_ENCRYPTION_KEY');
     }
 
     const decipher = createDecipheriv('aes-256-gcm', key, Buffer.from(payload.iv, 'base64'));
@@ -354,7 +429,7 @@ export class BackupLogsService {
 
   private validateBackupPayload(payload: any) {
     if (!payload || payload.version !== this.backupVersion || !payload.data) {
-      throw new BadRequestException('File backup không hợp lệ hoặc không đúng phiên bản');
+      throw new BadRequestException('File backup khong hop le hoac khong dung phien ban');
     }
 
     const requiredArrays = [
@@ -372,7 +447,7 @@ export class BackupLogsService {
     ];
     for (const key of requiredArrays) {
       if (payload.data[key] !== undefined && !Array.isArray(payload.data[key])) {
-        throw new BadRequestException(`Dữ liệu backup không hợp lệ: ${key}`);
+        throw new BadRequestException(`Du lieu backup khong hop le: ${key}`);
       }
     }
   }

@@ -109,7 +109,8 @@ export const backupLogsService = {
   create: (data: any) => api.post('/backup-logs', data).then(r => r.data),
   run: () => api.post('/backup-logs/run').then(r => r.data),
   restore: (backup_id: number, confirmation = 'RESTORE') =>
-    api.post('/backup-logs/restore', { backup_id, confirmation }).then(r => r.data),
+    api.post('/backup-logs/restore', { backup_id, confirmation }, { timeout: 300000 }).then(r => r.data),
+  remove: (backup_id: number) => api.delete(`/backup-logs/${backup_id}`).then(r => r.data),
 }
 
 export const supportRequestsService = {
@@ -124,6 +125,9 @@ export const healthService = {
 
 export const managerRoleRequestsService = {
   getAll: () => api.get('/manager-role-requests').then(r => r.data),
+  getPending: () => api.get('/manager-role-requests/pending').then(r => r.data),
+  getHistory: () => api.get('/manager-role-requests/history').then(r => r.data),
+  getOne: (id: number) => api.get(`/manager-role-requests/${id}`).then(r => r.data),
   create: (data: any) => api.post('/manager-role-requests', data).then(r => r.data),
   review: (id: number, data: any) => api.patch(`/manager-role-requests/${id}/review`, data).then(r => r.data),
 }
