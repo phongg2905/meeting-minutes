@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { backupLogsService } from '../../services'
-import { Button, Card, DatePicker, Input, Popconfirm, Select, Space, Table, Tag, Tooltip, Typography, message } from 'antd'
-import { DatabaseOutlined, DeleteOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons'
+import { Button, Card, Col, DatePicker, Input, Popconfirm, Row, Select, Space, Table, Tag, Tooltip, Typography, message } from 'antd'
+import { DatabaseOutlined, ClockCircleOutlined, CalendarOutlined, DeleteOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons'
 import { formatDateTime } from '../../utils'
 
 const { Text } = Typography
@@ -27,11 +27,18 @@ export default function BackupLogsPage() {
     }),
   })
 
+  const { data: statusData } = useQuery({
+    queryKey: ['backup-logs-status'],
+    queryFn: () => backupLogsService.getStatus(),
+    refetchInterval: 60000,
+  })
+
   const runBackupMutation = useMutation({
     mutationFn: backupLogsService.run,
     onSuccess: () => {
       message.success('Tạo backup thành công')
       queryClient.invalidateQueries({ queryKey: ['backup-logs'] })
+      queryClient.invalidateQueries({ queryKey: ['backup-logs-status'] })
     },
     onError: (err: any) => message.error(err?.response?.data?.message || 'Không thể tạo backup'),
   })
@@ -50,6 +57,7 @@ export default function BackupLogsPage() {
     onSuccess: () => {
       message.success('Xóa bản ghi backup thành công')
       queryClient.invalidateQueries({ queryKey: ['backup-logs'] })
+      queryClient.invalidateQueries({ queryKey: ['backup-logs-status'] })
     },
     onError: (err: any) => message.error(err?.response?.data?.message || 'Không thể xóa bản ghi backup'),
   })
@@ -59,35 +67,65 @@ export default function BackupLogsPage() {
       title: 'Loại thao tác',
       dataIndex: 'action_type',
       key: 'action_type',
-      render: (value: string) => <Tag color={value === 'restore' ? 'orange' : 'blue'}>{value}</Tag>,
+      width: 140,
+      render: (value: string) => (
+        <Tag
+          color={value === 'restore' ? 'orange' : 'blue'}
+          style={{
+            fontWeight: 600,
+            maxWidth: '100%',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {value}
+        </Tag>
+      ),
     },
     {
       title: 'Tệp',
       dataIndex: 'file_name',
       key: 'file_name',
-      render: (value: string) => value || '-',
+      width: 200,
+      ellipsis: { showTitle: false },
+      render: (value: string) => value ? (
+        <Text ellipsis={{ tooltip: value }} style={{ fontSize: 13 }}>{value}</Text>
+      ) : '-',
     },
     {
       title: 'Đường dẫn',
       dataIndex: 'file_path',
       key: 'file_path',
-      ellipsis: true,
-      render: (value: string) => value || '-',
+      ellipsis: { showTitle: false },
+      render: (value: string) => value ? (
+        <Text ellipsis={{ tooltip: value }} style={{ fontSize: 13 }}>{value}</Text>
+      ) : '-',
     },
     {
       title: 'Người thực hiện',
       key: 'performer',
-      render: (_: any, record: any) => record.performer?.full_name || '-',
+      width: 160,
+      ellipsis: { showTitle: false },
+      render: (_: any, record: any) => (
+        <Text ellipsis={{ tooltip: record.performer?.full_name }} style={{ fontSize: 13 }}>
+          {record.performer?.full_name || '-'}
+        </Text>
+      ),
     },
     {
       title: 'Thời gian',
       dataIndex: 'created_at',
       key: 'created_at',
-      render: (value: string) => <Text>{formatDateTime(value)}</Text>,
+      width: 150,
+      render: (value: string) => (
+        <Text style={{ fontSize: 12, whiteSpace: 'nowrap' }}>{formatDateTime(value)}</Text>
+      ),
     },
     {
       title: 'Thao tác',
       key: 'actions',
+      width: 120,
       render: (_: any, record: any) => (
         record.file_path ? (
           <Space>
@@ -151,6 +189,101 @@ export default function BackupLogsPage() {
           </Button>
         </Space>
       </div>
+
+      <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
+        <Col xs={24}>
+          <Card style={{ boxShadow: '0 1px 6px rgba(0,0,0,0.05)' }}>
+            <Row gutter={[16, 16]}>
+              <Col xs={12} sm={6}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{
+                    width: 40, height: 40, borderRadius: 10,
+                    background: statusData?.lastManualBackupAt ? '#f0fdf4' : '#fff7ed',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    flexShrink: 0,
+                  }}>
+                    <DatabaseOutlined style={{ fontSize: 18, color: statusData?.lastManualBackupAt ? '#16a34a' : '#d97706' }} />
+                  </div>
+                  <div style={{ minWidth: 0 }}>
+                    <Text type="secondary" style={{ fontSize: 12 }}>
+                      Backup thủ công gần nhất
+                    </Text>
+                    <Tooltip title={statusData?.lastManualBackupFileName || undefined}>
+                      <div style={{ fontWeight: 600, fontSize: 13, marginTop: 1 }}>
+                        {statusData?.lastManualBackupAt
+                          ? formatDateTime(statusData.lastManualBackupAt)
+                          : 'Chưa có'}
+                      </div>
+                    </Tooltip>
+                  </div>
+                </div>
+              </Col>
+              <Col xs={12} sm={6}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{
+                    width: 40, height: 40, borderRadius: 10,
+                    background: statusData?.lastAutoBackupAt ? '#f0f9ff' : '#f8fafc',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    flexShrink: 0,
+                  }}>
+                    <ClockCircleOutlined style={{ fontSize: 18, color: statusData?.lastAutoBackupAt ? '#2563eb' : '#94a3b8' }} />
+                  </div>
+                  <div style={{ minWidth: 0 }}>
+                    <Text type="secondary" style={{ fontSize: 12 }}>
+                      Backup tự động gần nhất
+                    </Text>
+                    <Tooltip title={statusData?.lastAutoBackupFileName || undefined}>
+                      <div style={{ fontWeight: 600, fontSize: 13, marginTop: 1 }}>
+                        {statusData?.lastAutoBackupAt
+                          ? formatDateTime(statusData.lastAutoBackupAt)
+                          : 'Chưa có'}
+                      </div>
+                    </Tooltip>
+                  </div>
+                </div>
+              </Col>
+              <Col xs={12} sm={6}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{
+                    width: 40, height: 40, borderRadius: 10,
+                    background: '#fef3c7',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    flexShrink: 0,
+                  }}>
+                    <CalendarOutlined style={{ fontSize: 18, color: '#d97706' }} />
+                  </div>
+                  <div style={{ minWidth: 0 }}>
+                    <Text type="secondary" style={{ fontSize: 12 }}>Lịch tự động tiếp theo</Text>
+                    <div style={{ fontWeight: 600, fontSize: 13, marginTop: 1 }}>
+                      {statusData?.nextBackupAt
+                        ? formatDateTime(statusData.nextBackupAt)
+                        : '—'}
+                    </div>
+                  </div>
+                </div>
+              </Col>
+              <Col xs={12} sm={6}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{
+                    width: 40, height: 40, borderRadius: 10,
+                    background: '#f0fdf4',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    flexShrink: 0,
+                  }}>
+                    <DatabaseOutlined style={{ fontSize: 18, color: '#059669' }} />
+                  </div>
+                  <div style={{ minWidth: 0 }}>
+                    <Text type="secondary" style={{ fontSize: 12 }}>Tổng / Lưu giữ</Text>
+                    <div style={{ fontWeight: 600, fontSize: 13, marginTop: 1 }}>
+                      {statusData?.totalBackups ?? 0} bản / {statusData?.retentionDays ?? '—'} ngày
+                    </div>
+                  </div>
+                </div>
+              </Col>
+            </Row>
+          </Card>
+        </Col>
+      </Row>
 
       <Card style={{ marginBottom: 16, boxShadow: '0 1px 6px rgba(0,0,0,0.05)' }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>

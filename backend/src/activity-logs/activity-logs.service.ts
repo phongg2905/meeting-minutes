@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
@@ -28,8 +28,16 @@ export class ActivityLogsService {
     }
     if (query.date_from || query.date_to) {
       where.created_at = {};
-      if (query.date_from) where.created_at.gte = new Date(query.date_from);
-      if (query.date_to) where.created_at.lte = new Date(`${query.date_to}T23:59:59.999Z`);
+      if (query.date_from) {
+        const d = new Date(query.date_from);
+        if (isNaN(d.getTime())) throw new BadRequestException('Ngày bắt đầu không hợp lệ');
+        where.created_at.gte = d;
+      }
+      if (query.date_to) {
+        const d = new Date(`${query.date_to}T23:59:59.999Z`);
+        if (isNaN(d.getTime())) throw new BadRequestException('Ngày kết thúc không hợp lệ');
+        where.created_at.lte = d;
+      }
     }
 
     const [data, total] = await Promise.all([

@@ -130,11 +130,11 @@ async function upsertBaseData() {
     await prisma.notification.deleteMany({ where: { user_id: searcher.user_id } });
     await prisma.activityLog.deleteMany({ where: { user_id: searcher.user_id } });
     await prisma.managerRoleRequest.deleteMany({ where: { user_id: searcher.user_id } });
-    await prisma.supportRequest.updateMany({
+    await prisma.supportTicket.updateMany({
       where: { handled_by: searcher.user_id },
       data: { handled_by: null },
     });
-    await prisma.supportRequest.deleteMany({ where: { requested_by: searcher.user_id } });
+    await prisma.supportTicket.deleteMany({ where: { requested_by: searcher.user_id } });
     await prisma.user.delete({ where: { user_id: searcher.user_id } });
   }
   await prisma.role.deleteMany({ where: { role_id: 4 } });
@@ -444,6 +444,8 @@ async function seedMeetingMinutes(userMap: Record<string, { user_id: number; ful
           file_name: attachment.file_name,
           file_path: storagePath,
           file_type: attachment.file_type,
+          is_public_safe: true,
+          public_scan_status: 'approved',
         },
       });
     }
@@ -455,26 +457,29 @@ async function seedOperationalData(userMap: Record<string, { user_id: number; fu
   const managerId = userMap['manager@school.edu.vn'].user_id;
   const studentId = userMap['student@school.edu.vn'].user_id;
 
-  await prisma.supportRequest.deleteMany({
+  await prisma.supportTicket.deleteMany({
     where: {
       title: { in: ['Không tải được file đính kèm', 'Cần chỉnh sửa thông tin lớp'] },
     },
   });
-  await prisma.supportRequest.createMany({
+  await prisma.supportTicket.createMany({
     data: [
       {
         requested_by: studentId,
         title: 'Không tải được file đính kèm',
         content: 'Người dùng báo lỗi khi tải file đính kèm của biên bản công khai.',
-        status: 'open',
+        status: 'PENDING',
+        category: 'kỹ thuật',
       },
       {
         requested_by: managerId,
         title: 'Cần chỉnh sửa thông tin lớp',
         content: 'Yêu cầu hỗ trợ cập nhật tên lớp trong một biên bản đã hoàn tất.',
-        status: 'resolved',
-        response: 'Admin đã hướng dẫn chuyển biên bản về nội bộ trước khi chỉnh sửa.',
+        status: 'COMPLETED',
+        resolution: 'Admin đã hướng dẫn chuyển biên bản về nội bộ trước khi chỉnh sửa.',
         handled_by: adminId,
+        resolved_by: adminId,
+        resolved_at: new Date(),
       },
     ],
   });

@@ -16,7 +16,7 @@ export class HealthController {
     const [users, minutes, openSupport, recentErrors] = await Promise.all([
       this.prisma.user.count(),
       this.prisma.meetingMinute.count(),
-      this.prisma.supportRequest.count({ where: { status: 'open' } }),
+      this.prisma.supportTicket.count({ where: { status: 'PENDING' } }),
       this.prisma.activityLog.count({ where: { action_name: { contains: 'ERROR', mode: 'insensitive' } } }),
     ]);
 

@@ -7,5 +7,6 @@ import { ActivityLogsModule } from '../activity-logs/activity-logs.module';
   imports: [ActivityLogsModule],
   providers: [BackupLogsService],
   controllers: [BackupLogsController],
+  exports: [BackupLogsService],
 })
 export class BackupLogsModule {}

@@ -5,6 +5,8 @@ export function sanitizeUser<T extends Record<string, any>>(user: T) {
     password_hash,
     password_reset_code_hash,
     password_reset_expires_at,
+    register_otp_hash,
+    register_otp_expires_at,
     ...safeUser
   } = user;
 

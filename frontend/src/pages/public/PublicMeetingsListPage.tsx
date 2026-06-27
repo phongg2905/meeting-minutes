@@ -13,15 +13,13 @@ const { RangePicker } = DatePicker
 export default function PublicMeetingsListPage() {
   const navigate = useNavigate()
   const [search, setSearch] = useState('')
-  const [classFilter, setClassFilter] = useState('')
   const [dateRange, setDateRange] = useState<[Dayjs | null, Dayjs | null] | null>(null)
   const [page, setPage] = useState(1)
 
   const { data, isLoading } = useQuery({
-    queryKey: ['public-meetings', search, classFilter, dateRange, page],
+    queryKey: ['public-meetings', search, dateRange, page],
     queryFn: () => publicMeetingMinutesService.getAll({
       search: search || undefined,
-      class_name: classFilter || undefined,
       date_from: dateRange?.[0]?.format('YYYY-MM-DD'),
       date_to: dateRange?.[1]?.format('YYYY-MM-DD'),
       page,
@@ -71,7 +69,7 @@ export default function PublicMeetingsListPage() {
 
         <Card style={{ marginBottom: 16 }}>
           <Row gutter={[12, 12]}>
-            <Col xs={24} md={10}>
+            <Col xs={24} md={14}>
               <Input
                 prefix={<SearchOutlined />}
                 placeholder="Tìm theo tiêu đề, mã biên bản, lớp..."
@@ -83,18 +81,7 @@ export default function PublicMeetingsListPage() {
                 allowClear
               />
             </Col>
-            <Col xs={24} md={6}>
-              <Input
-                placeholder="Lọc theo lớp"
-                value={classFilter}
-                onChange={(e) => {
-                  setClassFilter(e.target.value)
-                  setPage(1)
-                }}
-                allowClear
-              />
-            </Col>
-            <Col xs={24} md={8}>
+            <Col xs={24} md={10}>
               <RangePicker
                 style={{ width: '100%' }}
                 format="DD/MM/YYYY"

@@ -22,7 +22,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       include: { role: true },
     });
     if (!user || user.status !== USER_STATUS_ACTIVE) {
-      throw new UnauthorizedException('TÃ i khoáº£n Ä‘Ã£ bá»‹ vÃ´ hiá»‡u hÃ³a');
+      throw new UnauthorizedException('Tài khoản đã bị vô hiệu hóa');
     }
     return sanitizeUser(user);
   }
