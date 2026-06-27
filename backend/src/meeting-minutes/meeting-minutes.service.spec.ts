@@ -7,19 +7,19 @@ const baseMinute = {
   minute_code: 'BB-202605-0001',
   type_id: 1,
   created_by: 2,
-  title: 'Há»p lá»›p thang 5',
+  title: 'Họp lớp thang 5',
   class_name: 'CNTT01',
   meeting_date: new Date('2026-05-18'),
   start_time: new Date('1970-01-01T08:00:00'),
   end_time: new Date('1970-01-01T09:00:00'),
   location: 'A101',
-  meeting_form: 'Trá»±c tiáº¿p',
+  meeting_form: 'Trực tiếp',
   host_name: 'Nguyen Van A',
   secretary_name: 'Tran Thi B',
   attendee_summary: '30 sinh vien',
   absentee_summary: null,
   purpose: 'Sinh hoat lop',
-  discussion_content: 'Ná»™i dung hop',
+  discussion_content: 'Nội dung hop',
   conclusion_content: null,
   followup_summary: null,
   status: 'completed',
@@ -108,18 +108,18 @@ describe('MeetingMinutesService permissions', () => {
   it('blocks a minute manager from editing another creator minute', async () => {
     const { service } = createService();
 
-    await expect(service.update(10, { title: 'Sá»­a tiÃªu Ä‘á»' }, 99, 2)).rejects.toBeInstanceOf(ForbiddenException);
+    await expect(service.update(10, { title: 'Sửa tiêu đề' }, 99, 2)).rejects.toBeInstanceOf(ForbiddenException);
   });
 
   it('keeps a public minute public after content edit by its creator', async () => {
     const { service, prisma } = createService();
-    prisma.meetingMinute.update.mockResolvedValue({ ...baseMinute, title: 'TiÃªu Ä‘á» moi', is_public: true });
+    prisma.meetingMinute.update.mockResolvedValue({ ...baseMinute, title: 'Tiêu đề moi', is_public: true });
 
-    await service.update(10, { title: 'TiÃªu Ä‘á» moi' }, 2, 2);
+    await service.update(10, { title: 'Tiêu đề moi' }, 2, 2);
 
     expect(prisma.meetingMinute.update).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({
-        title: 'TiÃªu Ä‘á» moi',
+        title: 'Tiêu đề moi',
       }),
     }));
     expect(prisma.meetingMinute.update.mock.calls[0][0].data.status).toBeUndefined();
@@ -137,7 +137,7 @@ describe('MeetingMinutesService permissions', () => {
           participant_id: 31,
           minute_id: 10,
           full_name: 'Nguyen Van A',
-          role_in_meeting: 'Chá»§ tá»a',
+          role_in_meeting: 'Chủ tọa',
           attendance_status: 'present',
         } as any,
       ],
@@ -145,7 +145,7 @@ describe('MeetingMinutesService permissions', () => {
         {
           task_id: 15,
           minute_id: 10,
-          task_content: 'Tá»•ng hop so lieu',
+          task_content: 'Tổng hop so lieu',
           assigned_to: 'Tran Thi B',
           deadline: '2026-05-30',
           task_status: 'done',
@@ -160,7 +160,7 @@ describe('MeetingMinutesService permissions', () => {
             data: [
               {
                 full_name: 'Nguyen Van A',
-                role_in_meeting: 'Chá»§ tá»a',
+                role_in_meeting: 'Chủ tọa',
                 attendance_status: 'present',
               },
             ],
@@ -170,7 +170,7 @@ describe('MeetingMinutesService permissions', () => {
           createMany: {
             data: [
               {
-                task_content: 'Tá»•ng hop so lieu',
+                task_content: 'Tổng hop so lieu',
                 assigned_to: 'Tran Thi B',
                 deadline: new Date('2026-05-30'),
                 task_status: 'done',
@@ -213,12 +213,12 @@ describe('MeetingMinutesService permissions', () => {
     await expect(service.create({
       minute_code: 'BB-DUP',
       type_id: 1,
-      title: 'Há»p lá»›p',
+      title: 'Họp lớp',
       class_name: 'CNTT01',
       meeting_date: '2026-05-18',
       start_time: '08:00',
       end_time: '09:00',
-      discussion_content: 'Ná»™i dung',
+      discussion_content: 'Nội dung',
     }, 2)).rejects.toThrow('Mã biên bản đã tồn tại');
   });
 

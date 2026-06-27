@@ -58,7 +58,7 @@ export class MinuteAttachmentsService {
   }
 
   async create(minuteId: number, uploadedBy: number, roleId: number, file: any) {
-    if (!canWriteMinutes(roleId)) throw new ForbiddenException('TÃ i khoáº£n nÃ y chá»‰ Ä‘Æ°á»£c tra cá»©u');
+    if (!canWriteMinutes(roleId)) throw new ForbiddenException('Tài khoản này chỉ được tra cứu');
     this.validateFile(file);
     await this.assertMinuteWriteAccess(minuteId, uploadedBy, roleId);
     const extension = extname(file.originalname).toLowerCase();
@@ -83,12 +83,12 @@ export class MinuteAttachmentsService {
       include: { uploader: { select: { full_name: true } } },
     });
 
-    await this.activityLogs.log(uploadedBy, 'UPLOAD', 'minute_attachments', attachment.attachment_id, `Táº£i lÃªn tá»‡p: ${file.originalname}`);
+    await this.activityLogs.log(uploadedBy, 'UPLOAD', 'minute_attachments', attachment.attachment_id, `Tải lên tệp: ${file.originalname}`);
     return this.toOwnerAttachment(attachment);
   }
 
   async updatePublicSafety(id: number, userId: number, roleId: number, isPublicSafe: boolean) {
-    if (!canWriteMinutes(roleId)) throw new ForbiddenException('TÃ i khoáº£n nÃ y chá»‰ Ä‘Æ°á»£c tra cá»©u');
+    if (!canWriteMinutes(roleId)) throw new ForbiddenException('Tài khoản này chỉ được tra cứu');
     const attachment = await this.prisma.minuteAttachment.findUnique({
       where: { attachment_id: id },
       include: {
@@ -98,17 +98,15 @@ export class MinuteAttachmentsService {
         uploader: { select: { full_name: true } },
       },
     });
-    if (!attachment) throw new NotFoundException('KhÃ´ng tÃ¬m tháº¥y tá»‡p Ä‘Ã­nh kÃ¨m');
+    if (!attachment) throw new NotFoundException('Không tìm thấy tệp đính kèm');
     if (!canManageMinute(roleId, userId, attachment.minute.created_by)) {
-      throw new ForbiddenException('Báº¡n khÃ´ng cÃ³ quyá»n cáº­p nháº­t tráº¡ng thÃ¡i cÃ´ng khai cá»§a tá»‡p nÃ y');
+      throw new ForbiddenException('Bạn không có quyền cập nhật trạng thái công khai của tệp này');
     }
 
     const updated = await this.prisma.minuteAttachment.update({
       where: { attachment_id: id },
       data: {
         is_public_safe: isPublicSafe,
-        // Keep a dedicated scan status so an async scanner can later move files
-        // from pending -> approved/rejected without changing the visibility API.
         public_scan_status: isPublicSafe ? ATTACHMENT_PUBLIC_SCAN_APPROVED : ATTACHMENT_PUBLIC_SCAN_PENDING,
       },
       include: { uploader: { select: { full_name: true } } },
@@ -137,25 +135,25 @@ export class MinuteAttachmentsService {
         },
       },
     });
-    if (!attachment) throw new NotFoundException('KhÃ´ng tÃ¬m tháº¥y tá»‡p Ä‘Ã­nh kÃ¨m');
+    if (!attachment) throw new NotFoundException('Không tìm thấy tệp đính kèm');
 
     const { scope } = this.assertAttachmentAccess(attachment, userId, roleId);
     if (scope === 'authenticated_public' && !attachment.is_public_safe) {
-      throw new ForbiddenException('Tá»‡p Ä‘Ã­nh kÃ¨m nÃ y chÆ°a Ä‘Æ°á»£c cho phÃ©p trong luá»“ng cÃ´ng khai');
+      throw new ForbiddenException('Tệp đính kèm này chưa được cho phép trong luồng công khai');
     }
 
-    await this.activityLogs.log(userId, 'DOWNLOAD', 'minute_attachments', id, `Táº£i xuá»‘ng tá»‡p: ${attachment.file_name}`);
+    await this.activityLogs.log(userId, 'DOWNLOAD', 'minute_attachments', id, `Tải xuống tệp: ${attachment.file_name}`);
     const content = await this.readAttachmentContent(attachment.file_path);
     return { attachment, content };
   }
 
   async remove(id: number, userId: number, roleId: number) {
-    if (!canWriteMinutes(roleId)) throw new ForbiddenException('TÃ i khoáº£n nÃ y chá»‰ Ä‘Æ°á»£c tra cá»©u');
+    if (!canWriteMinutes(roleId)) throw new ForbiddenException('Tài khoản này chỉ được tra cứu');
     const attachment = await this.prisma.minuteAttachment.findUnique({
       where: { attachment_id: id },
       include: { minute: true },
     });
-    if (!attachment) throw new NotFoundException('KhÃ´ng tÃ¬m tháº¥y tá»‡p Ä‘Ã­nh kÃ¨m');
+    if (!attachment) throw new NotFoundException('Không tìm thấy tệp đính kèm');
     await this.assertMinuteWriteAccess(attachment.minute_id, userId, roleId);
 
     await this.prisma.minuteAttachment.delete({ where: { attachment_id: id } });
@@ -164,8 +162,8 @@ export class MinuteAttachmentsService {
     } catch {
       // File may already be gone; DB record has still been cleaned up.
     }
-    await this.activityLogs.log(userId, 'DELETE', 'minute_attachments', id, `XÃ³a tá»‡p: ${attachment.file_name}`);
-    return { message: 'XÃ³a tá»‡p Ä‘Ã­nh kÃ¨m thÃ nh cÃ´ng' };
+    await this.activityLogs.log(userId, 'DELETE', 'minute_attachments', id, `Xóa tệp: ${attachment.file_name}`);
+    return { message: 'Xóa tệp đính kèm thành công' };
   }
 
   private async uploadToSupabase(path: string, buffer: Buffer, mimetype: string) {
@@ -183,7 +181,7 @@ export class MinuteAttachmentsService {
 
     if (!response.ok) {
       const detail = await response.text().catch(() => '');
-      throw new BadRequestException(`KhÃ´ng thá»ƒ táº£i file lÃªn Supabase Storage${detail ? `: ${detail}` : ''}`);
+      throw new BadRequestException(`Không thể tải file lên Supabase Storage${detail ? `: ${detail}` : ''}`);
     }
   }
 
@@ -197,7 +195,7 @@ export class MinuteAttachmentsService {
     });
 
     if (!response.ok) {
-      throw new NotFoundException('KhÃ´ng thá»ƒ táº£i ná»™i dung file tá»« Supabase Storage');
+      throw new NotFoundException('Không thể tải nội dung file từ Supabase Storage');
     }
 
     return Buffer.from(await response.arrayBuffer());
@@ -216,7 +214,7 @@ export class MinuteAttachmentsService {
     });
 
     if (!response.ok) {
-      throw new BadRequestException('KhÃ´ng thá»ƒ xÃ³a file trÃªn Supabase Storage');
+      throw new BadRequestException('Không thể xóa file trên Supabase Storage');
     }
   }
 
@@ -224,7 +222,7 @@ export class MinuteAttachmentsService {
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
     const url = process.env.SUPABASE_URL?.replace(/\/$/, '');
     if (!url || !serviceRoleKey) {
-      throw new BadRequestException('ChÆ°a cáº¥u hÃ¬nh SUPABASE_URL hoáº·c SUPABASE_SERVICE_ROLE_KEY Ä‘á»ƒ lÆ°u file');
+      throw new BadRequestException('Chưa cấu hình SUPABASE_URL hoặc SUPABASE_SERVICE_ROLE_KEY để lưu file');
     }
     return { url, serviceRoleKey };
   }
@@ -238,7 +236,7 @@ export class MinuteAttachmentsService {
       where: { minute_id: minuteId },
       include: { creator: { select: { status: true } } },
     });
-    if (!minute) throw new NotFoundException('KhÃ´ng tÃ¬m tháº¥y biÃªn báº£n');
+    if (!minute) throw new NotFoundException('Không tìm thấy biên bản');
     return this.assertAttachmentAccess({ minute }, userId, roleId);
   }
 
@@ -265,13 +263,13 @@ export class MinuteAttachmentsService {
       return { minute, scope: 'authenticated_public' as MinuteAccessScope };
     }
 
-    throw new ForbiddenException('Báº¡n khÃ´ng cÃ³ quyá»n truy cáº­p tá»‡p cá»§a biÃªn báº£n nÃ y');
+    throw new ForbiddenException('Bạn không có quyền truy cập tệp của biên bản này');
   }
 
   private async assertMinuteWriteAccess(minuteId: number, userId: number, roleId: number) {
     const { minute } = await this.assertMinuteAccess(minuteId, userId, roleId);
     if (!canManageMinute(roleId, userId, minute.created_by)) {
-      throw new ForbiddenException('Báº¡n khÃ´ng cÃ³ quyá»n thay Ä‘á»•i tá»‡p cá»§a biÃªn báº£n nÃ y');
+      throw new ForbiddenException('Bạn không có quyền thay đổi tệp của biên bản này');
     }
     return minute;
   }
@@ -293,21 +291,21 @@ export class MinuteAttachmentsService {
   }
 
   private validateFile(file: any) {
-    if (!file) throw new BadRequestException('ChÆ°a chá»n tá»‡p Ä‘Ã­nh kÃ¨m');
-    if (file.size > this.maxFileSize) throw new BadRequestException('Tá»‡p Ä‘Ã­nh kÃ¨m khÃ´ng Ä‘Æ°á»£c vÆ°á»£t quÃ¡ 10MB');
+    if (!file) throw new BadRequestException('Chưa chọn tệp đính kèm');
+    if (file.size > this.maxFileSize) throw new BadRequestException('Tệp đính kèm không được vượt quá 10MB');
     if (!this.allowedMimeTypes.has(file.mimetype)) {
-      throw new BadRequestException('Äá»‹nh dáº¡ng tá»‡p khÃ´ng Ä‘Æ°á»£c há»— trá»£');
+      throw new BadRequestException('Định dạng tệp không được hỗ trợ');
     }
     const extension = extname(file.originalname || '').toLowerCase();
     const allowedExtensions = this.allowedExtensionsByMime.get(file.mimetype) || [];
     if (!allowedExtensions.includes(extension)) {
-      throw new BadRequestException('Pháº§n má»Ÿ rá»™ng tá»‡p khÃ´ng khá»›p Ä‘á»‹nh dáº¡ng Ä‘Æ°á»£c phÃ©p');
+      throw new BadRequestException('Phần mở rộng tệp không khớp định dạng được phép');
     }
     if (!Buffer.isBuffer(file.buffer) || file.buffer.length === 0) {
-      throw new BadRequestException('Tá»‡p Ä‘Ã­nh kÃ¨m khÃ´ng há»£p lá»‡');
+      throw new BadRequestException('Tệp đính kèm không hợp lệ');
     }
     if (!this.hasValidSignature(file.mimetype, file.buffer)) {
-      throw new BadRequestException('Ná»™i dung tá»‡p khÃ´ng khá»›p Ä‘á»‹nh dáº¡ng Ä‘Æ°á»£c phÃ©p');
+      throw new BadRequestException('Nội dung tệp không khớp định dạng được phép');
     }
   }
 

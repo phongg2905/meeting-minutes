@@ -60,9 +60,9 @@ export class ManagerRoleRequestsService {
       where: { request_id: id },
       include: this.getInclude(),
     });
-    if (!request) throw new NotFoundException('KhÃ´ng tÃ¬m tháº¥y yÃªu cáº§u');
+    if (!request) throw new NotFoundException('Không tìm thấy yêu cầu');
     if (!isSystemAdmin(roleId) && request.user_id !== userId) {
-      throw new ForbiddenException('Báº¡n khÃ´ng cÃ³ quyá»n xem yÃªu cáº§u nÃ y');
+      throw new ForbiddenException('Bạn không có quyền xem yêu cầu này');
     }
     return request;
   }

@@ -59,7 +59,7 @@ export class UsersService {
       where: { user_id: id },
       include: { role: true },
     });
-    if (!user) throw new NotFoundException('KhÃ´ng tÃ¬m tháº¥y ngÆ°á»i dÃ¹ng');
+    if (!user) throw new NotFoundException('Không tìm thấy người dùng');
     return user;
   }
 
@@ -77,7 +77,7 @@ export class UsersService {
 
   async create(dto: CreateUserDto, actorId: number) {
     const existing = await this.findByEmail(dto.email);
-    if (existing) throw new ConflictException('Email Ä‘Ã£ tá»“n táº¡i');
+    if (existing) throw new ConflictException('Email đã tồn tại');
     await this.assertValidRoleId(dto.role_id);
     this.assertValidStatus(dto.status);
 
@@ -94,7 +94,7 @@ export class UsersService {
       include: { role: true },
     });
     const result = sanitizeUser(user);
-    await this.activityLogs.log(actorId, 'CREATE', 'users', result.user_id, `Táº¡o ngÆ°á»i dÃ¹ng: ${result.email}`);
+    await this.activityLogs.log(actorId, 'CREATE', 'users', result.user_id, `Tạo người dùng: ${result.email}`);
     return result;
   }
 
@@ -114,7 +114,7 @@ export class UsersService {
       include: { role: true },
     });
     const result = sanitizeUser(user);
-    await this.activityLogs.log(actorId, 'UPDATE', 'users', id, `Cáº­p nháº­t ngÆ°á»i dÃ¹ng: ${result.email}`);
+    await this.activityLogs.log(actorId, 'UPDATE', 'users', id, `Cập nhật người dùng: ${result.email}`);
     return result;
   }
 
@@ -129,7 +129,7 @@ export class UsersService {
       include: { role: true },
     });
     const result = sanitizeUser(user);
-    await this.activityLogs.log(id, 'UPDATE', 'users', id, `Cáº­p nháº­t há»“ sÆ¡: ${result.email}`);
+    await this.activityLogs.log(id, 'UPDATE', 'users', id, `Cập nhật hồ sơ: ${result.email}`);
     return result;
   }
 
@@ -143,7 +143,7 @@ export class UsersService {
   async remove(id: number, actorId: number) {
     const user = await this.findOne(id);
     const deleted = await this.prisma.user.delete({ where: { user_id: id } });
-    await this.activityLogs.log(actorId, 'DELETE', 'users', id, `XÃ³a nguoi dung: ${user.email}`);
+    await this.activityLogs.log(actorId, 'DELETE', 'users', id, `Xóa người dùng: ${user.email}`);
     return sanitizeUser(deleted);
   }
 

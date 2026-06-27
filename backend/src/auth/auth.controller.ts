@@ -20,9 +20,21 @@ export class AuthController {
   }
 
   @Post('register')
-  @ApiOperation({ summary: 'Đăng ký tai khoan moi' })
+  @ApiOperation({ summary: 'Đăng ký tài khoản mới (gửi mã OTP xác thực email)' })
   register(@Body() dto: RegisterDto) {
     return this.authService.register(dto);
+  }
+
+  @Post('verify-registration-otp')
+  @ApiOperation({ summary: 'Xác thực email bằng mã OTP đăng ký' })
+  verifyRegistrationOtp(@Body() dto: { email: string; code: string }) {
+    return this.authService.verifyRegistrationOtp(dto.email, dto.code);
+  }
+
+  @Post('resend-registration-otp')
+  @ApiOperation({ summary: 'Gửi lại mã OTP xác thực đăng ký' })
+  resendRegistrationOtp(@Body() dto: { email: string }) {
+    return this.authService.resendRegistrationOtp(dto.email);
   }
 
   @Post('forgot-password')

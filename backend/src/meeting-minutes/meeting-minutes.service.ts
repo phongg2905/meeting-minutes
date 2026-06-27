@@ -10,6 +10,7 @@ import {
   MINUTE_STATUS_COMPLETED,
   MINUTE_STATUS_DRAFT,
   ROLE_ADMIN,
+  ROLE_MINUTE_MANAGER,
   ROLE_STANDARD_USER,
   canManageMinute,
   canWriteMinutes,
@@ -284,15 +285,21 @@ export class MeetingMinutesService {
       throw new BadRequestException('Hãy tắt công khai trước khi chuyển biên bản về dạng chỉnh sửa');
     }
 
+    // Fetch raw minute to preserve reviewed_by/reviewed_at fields not included in sanitized response
+    const rawMinute = await this.prisma.meetingMinute.findUnique({
+      where: { minute_id: id },
+      select: { reviewed_by: true, reviewed_at: true, review_note: true, is_public: true, published_at: true },
+    });
+
     const minute = await this.prisma.meetingMinute.update({
       where: { minute_id: id },
       data: {
         status,
-        is_public: existing.is_public,
-        published_at: existing.published_at,
-        reviewed_by: null,
-        reviewed_at: null,
-        review_note: reviewNote,
+        is_public: rawMinute?.is_public ?? existing.is_public,
+        published_at: rawMinute?.published_at ?? existing.published_at,
+        reviewed_by: rawMinute?.reviewed_by ?? null,
+        reviewed_at: rawMinute?.reviewed_at ?? null,
+        review_note: reviewNote ?? rawMinute?.review_note,
       },
     });
     await this.activityLogs.log(userId, 'STATUS_CHANGE', 'meeting_minutes', id, `Đổi trạng thái -> ${status}`);
@@ -315,7 +322,7 @@ export class MeetingMinutesService {
     });
     await this.activityLogs.log(userId, 'PUBLIC_CHANGE', 'meeting_minutes', id, `${isPublic ? 'Công khai' : 'Ẩn'} biên bản`);
     if (isPublic) {
-      await this.notifications.createForRoles([ROLE_STANDARD_USER], {
+      await this.notifications.createForRoles([ROLE_STANDARD_USER, ROLE_MINUTE_MANAGER], {
         title: 'Có biên bản công khai mới',
         message: `${existing.minute_code} - ${existing.title}`,
         type: 'minute',
@@ -346,8 +353,8 @@ export class MeetingMinutesService {
     if (query.meeting_form) where.meeting_form = { contains: query.meeting_form, mode: 'insensitive' };
     if (query.date_from || query.date_to) {
       where.meeting_date = {};
-      if (query.date_from) where.meeting_date.gte = new Date(query.date_from);
-      if (query.date_to) where.meeting_date.lte = new Date(query.date_to);
+      if (query.date_from) where.meeting_date.gte = this.parseDateSafe(query.date_from);
+      if (query.date_to) where.meeting_date.lte = this.parseDateSafe(query.date_to);
     }
     if (query.search) {
       const searchOr = [
@@ -562,6 +569,13 @@ export class MeetingMinutesService {
     if (minute.created_by === userId) return 'owner';
     if (this.isVisibleToNonOwner(minute)) return 'authenticated_public';
     throw new ForbiddenException('Bạn không có quyền xem biên bản này');
+  }
+
+  private parseDateSafe(value: string | undefined): Date | undefined {
+    if (!value) return undefined;
+    const date = new Date(value);
+    if (isNaN(date.getTime())) throw new BadRequestException('Ngày tháng không hợp lệ');
+    return date;
   }
 
   private toParticipantCreateData(participants: any[]) {
