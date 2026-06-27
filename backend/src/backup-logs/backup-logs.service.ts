@@ -32,8 +32,16 @@ export class BackupLogsService {
     }
     if (query.date_from || query.date_to) {
       where.created_at = {};
-      if (query.date_from) where.created_at.gte = new Date(query.date_from);
-      if (query.date_to) where.created_at.lte = new Date(`${query.date_to}T23:59:59.999Z`);
+      if (query.date_from) {
+        const d = new Date(query.date_from);
+        if (isNaN(d.getTime())) throw new BadRequestException('Ngày bắt đầu không hợp lệ');
+        where.created_at.gte = d;
+      }
+      if (query.date_to) {
+        const d = new Date(`${query.date_to}T23:59:59.999Z`);
+        if (isNaN(d.getTime())) throw new BadRequestException('Ngày kết thúc không hợp lệ');
+        where.created_at.lte = d;
+      }
     }
 
     const [data, total] = await Promise.all([
@@ -81,7 +89,7 @@ export class BackupLogsService {
       this.prisma.minuteTask.findMany({ orderBy: { task_id: 'asc' } }),
       this.prisma.minuteParticipant.findMany({ orderBy: { participant_id: 'asc' } }),
       this.prisma.minuteAttachment.findMany({ orderBy: { attachment_id: 'asc' } }),
-      this.prisma.supportRequest.findMany({ orderBy: { request_id: 'asc' } }),
+      this.prisma.supportTicket.findMany({ orderBy: { ticket_id: 'asc' } }),
       this.prisma.managerRoleRequest.findMany({ orderBy: { request_id: 'asc' } }),
       this.prisma.activityLog.findMany({ orderBy: { log_id: 'asc' } }),
       this.prisma.backupLog.findMany({ orderBy: { backup_id: 'asc' } }),
@@ -186,7 +194,7 @@ export class BackupLogsService {
       uploaded_at: new Date(item.uploaded_at),
     })) ?? [];
 
-    const supportRequests = data.supportRequests?.map((item: any) => ({
+    const supportTickets = data.supportRequests?.map((item: any) => ({
       ...item,
       created_at: new Date(item.created_at),
       updated_at: item.updated_at ? new Date(item.updated_at) : null,
@@ -212,7 +220,7 @@ export class BackupLogsService {
       this.prisma.minuteAttachment.deleteMany(),
       this.prisma.minuteParticipant.deleteMany(),
       this.prisma.minuteTask.deleteMany(),
-      this.prisma.supportRequest.deleteMany(),
+      this.prisma.supportTicket.deleteMany(),
       this.prisma.managerRoleRequest.deleteMany(),
       this.prisma.activityLog.deleteMany(),
       this.prisma.backupLog.deleteMany(),
@@ -231,7 +239,7 @@ export class BackupLogsService {
       queries.push(this.prisma.minuteParticipant.createMany({ data: data.minuteParticipants }));
     }
     if (minuteAttachments.length) queries.push(this.prisma.minuteAttachment.createMany({ data: minuteAttachments }));
-    if (supportRequests.length) queries.push(this.prisma.supportRequest.createMany({ data: supportRequests }));
+    if (supportTickets.length) queries.push(this.prisma.supportTicket.createMany({ data: supportTickets }));
     if (managerRoleRequests.length) {
       queries.push(this.prisma.managerRoleRequest.createMany({ data: managerRoleRequests }));
     }
@@ -303,6 +311,45 @@ export class BackupLogsService {
     }
 
     return restoreLog;
+  }
+
+  async getStatus() {
+    const [allBackups, totalBackups] = await Promise.all([
+      this.prisma.backupLog.findMany({
+        where: { action_type: 'backup' },
+        orderBy: { created_at: 'desc' },
+        take: 100,
+        select: { created_at: true, file_name: true, performed_by: true },
+      }),
+      this.prisma.backupLog.count({ where: { action_type: 'backup' } }),
+    ]);
+
+    // Auto backups run at 2 AM server time — detect by hour (1:30–2:59 window)
+    const lastAutoBackup = allBackups.find((b) => {
+      const h = b.created_at.getHours();
+      const m = b.created_at.getMinutes();
+      return (h === 1 && m >= 30) || h === 2;
+    });
+    const lastManualBackup = allBackups.find((b) => b !== lastAutoBackup);
+
+    const now = new Date();
+    const nextBackup = new Date(now);
+    nextBackup.setHours(2, 0, 0, 0);
+    if (nextBackup <= now) {
+      nextBackup.setDate(nextBackup.getDate() + 1);
+    }
+
+    return {
+      lastBackupAt: allBackups[0]?.created_at || null,
+      lastBackupFileName: allBackups[0]?.file_name || null,
+      lastAutoBackupAt: lastAutoBackup?.created_at || null,
+      lastAutoBackupFileName: lastAutoBackup?.file_name || null,
+      lastManualBackupAt: lastManualBackup?.created_at || null,
+      lastManualBackupFileName: lastManualBackup?.file_name || null,
+      nextBackupAt: nextBackup.toISOString(),
+      totalBackups,
+      retentionDays: this.backupRetentionDays,
+    };
   }
 
   async remove(userId: number, backupId: number) {
@@ -511,8 +558,14 @@ export class BackupLogsService {
   }
 
   private validateBackupPayload(payload: any) {
-    if (!payload || payload.version !== this.backupVersion || !payload.data) {
-      throw new BadRequestException('File backup khong hop le hoac khong dung phien ban');
+    if (!payload || !payload.data) {
+      throw new BadRequestException('File backup khong hop le hoac bi hong');
+    }
+    if (payload.version !== this.backupVersion) {
+      throw new BadRequestException(`Phien ban backup (v${payload.version}) khong tuong thich voi he thong (v${this.backupVersion}). Vui long su dung dung file backup.`);
+    }
+    if (!payload.exported_at) {
+      throw new BadRequestException('File backup thieu thong tin thoi gian xuat');
     }
 
     const requiredArrays = [
@@ -532,6 +585,16 @@ export class BackupLogsService {
       if (payload.data[key] !== undefined && !Array.isArray(payload.data[key])) {
         throw new BadRequestException(`Du lieu backup khong hop le: ${key}`);
       }
+    }
+
+    if (!Array.isArray(payload.data.roles) || payload.data.roles.length === 0) {
+      throw new BadRequestException('File backup thieu du lieu roles');
+    }
+    if (!Array.isArray(payload.data.users) || payload.data.users.length === 0) {
+      throw new BadRequestException('File backup thieu du lieu users');
+    }
+    if (!Array.isArray(payload.data.minuteTypes) || payload.data.minuteTypes.length === 0) {
+      throw new BadRequestException('File backup thieu du lieu minuteTypes');
     }
   }
 

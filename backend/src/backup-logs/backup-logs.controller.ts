@@ -18,6 +18,11 @@ export class BackupLogsController {
     return this.service.findAll(query);
   }
 
+  @Get('status')
+  status() {
+    return this.service.getStatus();
+  }
+
   @Post()
   create(@Request() req, @Body() data: CreateBackupLogDto) {
     return this.service.create(req.user.user_id, data);
