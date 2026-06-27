@@ -149,7 +149,7 @@ export class SupportTicketsService {
           },
           _count: { select: { messages: true } },
         },
-        orderBy: [{ last_message_at: 'desc' }, { created_at: 'desc' }],
+        orderBy: { created_at: 'desc' },
         skip: (page - 1) * limit,
         take: limit,
       }),
@@ -409,16 +409,12 @@ export class SupportTicketsService {
     if (ticket.status === TICKET_STATUS.COMPLETED) {
       throw new BadRequestException('Ticket đã được hoàn thành trước đó');
     }
-    if (ticket.status === TICKET_STATUS.PENDING) {
-      throw new BadRequestException(
-        'Ticket chưa được xử lý. Vui lòng xử lý trước khi hoàn thành.',
-      );
+    // PENDING, PROCESSING, WAITING_FOR_USER → COMPLETED đều được phép
+    const normalizedResolution = dto.resolution.trim();
+    if (!normalizedResolution) {
+      throw new BadRequestException('Nội dung kết quả xử lý không được để trống');
     }
-    if (ticket.status === TICKET_STATUS.WAITING_FOR_USER) {
-      throw new BadRequestException(
-        'Đang chờ người dùng bổ sung thông tin. Không thể hoàn thành lúc này.',
-      );
-    }
+    const resolutionContent = normalizedResolution;
 
     // Tạo message kết quả từ Admin
     await this.prisma.supportMessage.create({
@@ -426,7 +422,7 @@ export class SupportTicketsService {
         ticket_id: id,
         sender_id: adminId,
         sender_type: SENDER_TYPE.ADMIN,
-        content: dto.resolution,
+        content: resolutionContent,
       },
     });
 
@@ -435,7 +431,7 @@ export class SupportTicketsService {
       where: { ticket_id: id },
       data: {
         status: TICKET_STATUS.COMPLETED,
-        resolution: dto.resolution,
+        resolution: resolutionContent,
         handled_by: adminId,
         resolved_by: adminId,
         resolved_at: new Date(),
@@ -460,7 +456,7 @@ export class SupportTicketsService {
       'COMPLETE',
       'support_requests',
       id,
-      `Hoàn thành xử lý ticket: ${ticket.title}. Kết quả: ${dto.resolution}`,
+      `Hoàn thành xử lý ticket: ${ticket.title}. Kết quả: ${resolutionContent}`,
     );
 
     return {

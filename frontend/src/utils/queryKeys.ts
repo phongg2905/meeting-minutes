@@ -69,6 +69,7 @@ export const queryKeys = {
   notifications: {
     all: (limit?: number) => ['notifications', limit] as const,
     unreadCount: ['notifications', 'unread-count'] as const,
+    sidebarSummary: () => ['notifications', 'sidebar-summary'] as const,
   },
 } as const
 

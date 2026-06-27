@@ -28,6 +28,12 @@ export class NotificationsController {
     return this.notifications.markAsRead(id, req.user.user_id);
   }
 
+  @Get('sidebar-summary')
+  @ApiOperation({ summary: 'Tổng hợp số liệu cho badge sidebar (theo vai trò)' })
+  sidebarSummary(@Request() req) {
+    return this.notifications.sidebarSummary(req.user.user_id, req.user.role_id);
+  }
+
   @Patch('read-all')
   @ApiOperation({ summary: 'Đánh dấu tất cả thông báo đã đọc' })
   markAllAsRead(@Request() req) {

@@ -148,13 +148,20 @@ model ActivityLog {
 }
 
 model BackupLog {
-  backup_id    Int      @id @default(autoincrement())
-  performed_by Int
-  action_type  String   @db.VarChar(20)
-  file_name    String?  @db.VarChar(255)
-  file_path    String?  @db.VarChar(255)
-  created_at   DateTime @default(now())
-  performer    User     @relation(fields: [performed_by], references: [user_id])
+  backup_id     Int      @id @default(autoincrement())
+  performed_by  Int
+  action_type   String   @db.VarChar(20)
+  type          String?  @db.VarChar(20)
+  status        String   @default("PENDING") @db.VarChar(20)
+  started_at    DateTime?
+  completed_at  DateTime?
+  file_name     String?  @db.VarChar(255)
+  file_path     String?  @db.VarChar(255)
+  file_size     Int?
+  error_message String?
+  triggered_by  String?  @db.VarChar(50)
+  created_at    DateTime @default(now())
+  performer     User     @relation(fields: [performed_by], references: [user_id])
 
   @@map("backup_logs")
 }

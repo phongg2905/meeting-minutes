@@ -28,7 +28,7 @@ if (isLoading) return <div style={{ minHeight: '100vh', background: 'var(--color
         <Breadcrumb
           style={{ marginBottom: 16 }}
           items={[
-            { href: '/public/meetings', title: <HomeOutlined style={{ color: 'var(--color-text-secondary)' }} /> },
+            { title: <span onClick={() => navigate('/public/meetings')} style={{ cursor: 'pointer' }}><HomeOutlined style={{ color: 'var(--color-text-secondary)' }} /></span> },
             { title: minute.minute_code },
           ]}
         />

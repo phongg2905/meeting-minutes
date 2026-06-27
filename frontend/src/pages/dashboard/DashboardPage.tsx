@@ -50,22 +50,48 @@ export default function DashboardPage() {
       width: 130,
       render: (code: string, record: MeetingMinute) => (
         <span
-          onClick={() => navigate(`/meetings/${record.minute_id}`)}
-          style={{ fontWeight: 700, color: 'var(--color-primary)', cursor: 'pointer' }}
+          onClick={(e) => { e.stopPropagation(); navigate(`/meetings/${record.minute_id}`) }}
+          style={{
+            fontWeight: 700,
+            fontSize: 12,
+            color: 'var(--color-primary)',
+            cursor: 'pointer',
+            background: 'var(--color-primary-light)',
+            padding: '2px 10px',
+            borderRadius: 6,
+            display: 'inline-block',
+            whiteSpace: 'nowrap',
+            fontFamily: 'monospace',
+            letterSpacing: '0.3px',
+          }}
         >
           {code}
         </span>
       ),
     },
     {
-      title: 'Tiêu đề',
+      title: <span style={{ paddingLeft: 20 }}>Tiêu đề</span>,
       dataIndex: 'title',
       key: 'title',
       ellipsis: true,
       render: (title: string, record: MeetingMinute) => (
-        <div>
-          <div style={{ fontWeight: 500, fontSize: 13, color: 'var(--color-text)' }}>{title}</div>
-          <div style={{ fontSize: 11, color: 'var(--color-text-tertiary)' }}>Lớp: {record.class_name}</div>
+        <div
+          onClick={() => navigate(`/meetings/${record.minute_id}`)}
+          style={{ cursor: 'pointer', paddingLeft: 20 }}
+        >
+          <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--color-text)', lineHeight: 1.4 }}>{title}</div>
+          <div style={{ fontSize: 11, color: 'var(--color-text-tertiary)', marginTop: 2, display: 'flex', alignItems: 'center', gap: 4 }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+              <FileTextOutlined style={{ fontSize: 10 }} />
+              {record.class_name}
+            </span>
+            {record.minute_type?.type_name && (
+              <>
+                <span style={{ color: 'var(--color-border)' }}>·</span>
+                <span>{record.minute_type.type_name}</span>
+              </>
+            )}
+          </div>
         </div>
       ),
     },
@@ -73,22 +99,27 @@ export default function DashboardPage() {
       title: 'Ngày họp',
       dataIndex: 'meeting_date',
       key: 'meeting_date',
-      width: 100,
-      render: (d: string) => (
-        <span style={{ fontSize: 12, whiteSpace: 'nowrap', color: 'var(--color-text-secondary)' }}>
-          {formatDate(d)}
-        </span>
+      width: 115,
+      render: (d: string, record: MeetingMinute) => (
+        <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', whiteSpace: 'nowrap' }}>
+          <div>{formatDate(d)}</div>
+          {record.start_time && (
+            <div style={{ fontSize: 11, color: 'var(--color-text-tertiary)', marginTop: 1 }}>
+              {record.start_time?.substring(0, 5)}
+            </div>
+          )}
+        </div>
       ),
     },
     {
       title: 'Trạng thái',
       dataIndex: 'status',
       key: 'status',
-      width: 120,
+      width: 105,
       render: (s: string) => (
         <Tag
           color={STATUS_COLORS[s] || 'default'}
-          style={{ borderRadius: 6, fontWeight: 600, fontSize: 11 }}
+          style={{ borderRadius: 6, fontWeight: 600, fontSize: 11, border: 'none', padding: '2px 10px' }}
         >
           {STATUS_LABELS[s] || s}
         </Tag>
@@ -172,7 +203,7 @@ export default function DashboardPage() {
       <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
         <Col xs={24} sm={12} lg={6}><StatCard title="Tổng biên bản" value={stats.total} icon={<FileTextOutlined />} color="#2563EB" /></Col>
         <Col xs={24} sm={12} lg={6}><StatCard title="Đang chỉnh sửa" value={stats.editing} icon={<EyeOutlined />} color="#D97706" /></Col>
-        <Col xs={24} sm={12} lg={6}><StatCard title="Công khai" value={stats.public} icon={<CheckCircleOutlined />} color="#16A34A" onClick={() => navigate('/public/meetings')} /></Col>
+        <Col xs={24} sm={12} lg={6}><StatCard title="Công khai" value={stats.public} icon={<CheckCircleOutlined />} color="#16A34A" /></Col>
         <Col xs={24} sm={12} lg={6}><StatCard title="Nội bộ" value={stats.private} icon={<RiseOutlined />} color="#7C3AED" /></Col>
       </Row>
 

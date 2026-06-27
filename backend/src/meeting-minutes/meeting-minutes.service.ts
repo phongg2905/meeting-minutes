@@ -79,7 +79,7 @@ export class MeetingMinutesService {
           attachments: { select: { is_public_safe: true } },
           _count: { select: { tasks: true, participants: true, attachments: true } },
         },
-        orderBy: { meeting_date: 'desc' },
+        orderBy: { created_at: 'desc' },
         skip: query.page ? (Number(query.page) - 1) * (Number(query.limit) || 10) : 0,
         take: Number(query.limit) || 10,
       }),

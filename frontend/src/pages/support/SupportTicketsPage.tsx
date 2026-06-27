@@ -40,6 +40,7 @@ export default function SupportTicketsPage() {
   const [requestInfoContent, setRequestInfoContent] = useState('')
   const [completeModalOpen, setCompleteModalOpen] = useState(false)
   const [resolution, setResolution] = useState('')
+  const [resolutionError, setResolutionError] = useState('')
   const [page, setPage] = useState(1)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>()
@@ -107,15 +108,30 @@ export default function SupportTicketsPage() {
     },
   })
 
+  // Helper: lấy message lỗi từ API
+  const getApiErrorMessage = (error: unknown): string => {
+    if (error && typeof error === 'object' && 'response' in error) {
+      const axiosErr = error as any
+      const msg = axiosErr.response?.data?.message
+      if (Array.isArray(msg)) return msg.join(', ')
+      if (typeof msg === 'string') return msg
+    }
+    return 'Không thể hoàn thành yêu cầu hỗ trợ. Vui lòng thử lại.'
+  }
+
   const completeMutation = useMutation({
     mutationFn: ({ id, resolution }: { id: number; resolution: string }) =>
-      supportTicketsService.complete(id, { resolution }),
+      supportTicketsService.complete(id, { resolution: resolution.trim() }),
     onSuccess: () => {
-      message.success('Đã hoàn thành xử lý ticket')
+      message.success('Đã hoàn thành xử lý yêu cầu hỗ trợ.')
       setCompleteModalOpen(false)
       setResolution('')
+      setResolutionError('')
       refetchDetail()
       queryClient.invalidateQueries({ queryKey: ['support-tickets'] })
+    },
+    onError: (error: unknown) => {
+      message.error(getApiErrorMessage(error))
     },
   })
 
@@ -150,12 +166,24 @@ export default function SupportTicketsPage() {
   }
 
   const handleComplete = () => {
-    if (!resolution.trim() || !selectedTicket) return
+    if (!selectedTicket) {
+      message.error('Không xác định được yêu cầu hỗ trợ.')
+      return
+    }
+    const normalizedResult = resolution.trim()
+    if (!normalizedResult) {
+      setResolutionError('Vui lòng nhập nội dung kết quả xử lý.')
+      return
+    }
+    setResolutionError('')
     completeMutation.mutate({
       id: selectedTicket.ticket_id,
-      resolution,
+      resolution: normalizedResult,
     })
   }
+
+  const canSubmitComplete =
+    resolution.trim().length > 0 && !completeMutation.isPending
 
   const columns = [
     {
@@ -253,7 +281,7 @@ export default function SupportTicketsPage() {
         }}>
           <div style={{
             maxWidth: '80%',
-            background: isAdminMsg ? '#f0f5ff' : '#e6f7e6',
+            background: isAdminMsg ? 'var(--color-primary-light)' : 'var(--color-success-bg)',
             borderRadius: 12,
             borderTopLeftRadius: isAdminMsg ? 4 : 12,
             borderTopRightRadius: isAdminMsg ? 12 : 4,
@@ -261,9 +289,9 @@ export default function SupportTicketsPage() {
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
               {isAdminMsg ? (
-                <CrownOutlined style={{ color: '#faad14', fontSize: 13 }} />
+                <CrownOutlined style={{ color: 'var(--color-warning)', fontSize: 13 }} />
               ) : (
-                <UserOutlined style={{ color: '#52c41a', fontSize: 13 }} />
+                <UserOutlined style={{ color: 'var(--color-success)', fontSize: 13 }} />
               )}
               <Text strong style={{ fontSize: 12 }}>
                 {msg.sender?.full_name || (isAdminMsg ? 'Admin' : 'Người dùng')}
@@ -322,13 +350,13 @@ export default function SupportTicketsPage() {
     // COMPLETED - chỉ xem, không có ô nhập
     if (ticket.status === 'COMPLETED') {
       return (
-        <Card style={{ marginTop: 16, background: '#f6ffed', border: '1px solid #b7eb8f' }}>
+        <Card style={{ marginTop: 16, background: 'var(--color-success-bg)', border: '1px solid var(--color-success)' }}>
           <Space>
-            <CheckCircleOutlined style={{ color: '#52c41a', fontSize: 20 }} />
+            <CheckCircleOutlined style={{ color: 'var(--color-success)', fontSize: 20 }} />
             <div>
-              <Text strong style={{ color: '#52c41a' }}>Đã xử lý xong</Text>
+              <Text strong style={{ color: 'var(--color-success)' }}>Đã xử lý xong</Text>
               {ticket.resolution && (
-                <div style={{ marginTop: 4, color: '#595959', whiteSpace: 'pre-wrap' }}>
+                <div style={{ marginTop: 4, color: 'var(--color-text-secondary)', whiteSpace: 'pre-wrap' }}>
                   <Text type="secondary">Kết quả xử lý:</Text>
                   <Paragraph style={{ margin: '4px 0 0 0', whiteSpace: 'pre-wrap' }}>
                     {ticket.resolution}
@@ -370,9 +398,9 @@ export default function SupportTicketsPage() {
     // User reply (only when WAITING_FOR_USER)
     if (ticket.status === 'WAITING_FOR_USER') {
       return (
-        <Card style={{ marginTop: 16, background: '#fffbe6', border: '1px solid #ffe58f' }}>
+        <Card style={{ marginTop: 16, background: 'var(--color-warning-bg)', border: '1px solid var(--color-warning)' }}>
           <Title level={5} style={{ marginTop: 0 }}>
-            <InfoCircleOutlined style={{ color: '#faad14', marginRight: 8 }} />
+            <InfoCircleOutlined style={{ color: 'var(--color-warning)', marginRight: 8 }} />
             Admin yêu cầu bổ sung thông tin
           </Title>
           <TextArea
@@ -414,7 +442,7 @@ export default function SupportTicketsPage() {
     // PROCESSING or PENDING for user - just show info
     if (ticket.status === 'PROCESSING' || ticket.status === 'PENDING') {
       return (
-        <Card style={{ marginTop: 16, background: '#f0f5ff', border: '1px solid #d6e4ff' }}>
+        <Card style={{ marginTop: 16, background: 'var(--color-primary-light)', border: '1px solid var(--color-primary)' }}>
           <Text type="secondary">
             <InfoCircleOutlined style={{ marginRight: 6 }} />
             Yêu cầu của bạn đang được xử lý. Vui lòng chờ phản hồi từ Admin.
@@ -591,7 +619,7 @@ export default function SupportTicketsPage() {
       >
         {ticketDetail ? (
           <>
-            <Card style={{ marginBottom: 16, background: '#fafafa' }} size="small">
+            <Card style={{ marginBottom: 16, background: 'var(--color-surface-muted)' }} size="small">
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                 <div>
                   <Text type="secondary" style={{ fontSize: 12 }}>Người gửi</Text>
@@ -656,18 +684,37 @@ export default function SupportTicketsPage() {
       <Modal
         title="Hoàn thành xử lý"
         open={completeModalOpen}
-        onCancel={() => { setCompleteModalOpen(false); setResolution('') }}
+        onCancel={() => {
+          if (!completeMutation.isPending) {
+            setCompleteModalOpen(false)
+            setResolution('')
+            setResolutionError('')
+          }
+        }}
         onOk={handleComplete}
-        okText="Hoàn thành"
+        okText={completeMutation.isPending ? 'Đang hoàn thành...' : 'Hoàn thành'}
+        okButtonProps={{ disabled: !canSubmitComplete }}
         okType="primary"
         confirmLoading={completeMutation.isPending}
+        closable={!completeMutation.isPending}
+        maskClosable={!completeMutation.isPending}
       >
         <TextArea
           rows={4}
           value={resolution}
-          onChange={(e) => setResolution(e.target.value)}
+          onChange={(e) => {
+            setResolution(e.target.value)
+            if (resolutionError) setResolutionError('')
+          }}
+          disabled={completeMutation.isPending}
           placeholder="Nhập nội dung kết quả xử lý...&#10;VD: Đã đặt lại mật khẩu. Bạn có thể đăng nhập lại."
+          status={resolutionError ? 'error' : undefined}
         />
+        {resolutionError && (
+          <div style={{ color: 'var(--color-danger)', fontSize: 13, marginTop: 6 }}>
+            {resolutionError}
+          </div>
+        )}
       </Modal>
     </div>
   )

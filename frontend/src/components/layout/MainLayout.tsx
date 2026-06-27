@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { Outlet } from 'react-router-dom'
 import { Layout } from 'antd'
 import AppSidebar from './AppSidebar'
 import AppHeader from './AppHeader'
+import { PageSkeleton } from '../common'
 
 const { Content } = Layout
 
@@ -71,9 +72,9 @@ export default function MainLayout() {
             width: '100%',
           }}
         >
-          <div className="fade-in">
+          <Suspense fallback={<PageSkeleton />}>
             <Outlet />
-          </div>
+          </Suspense>
         </Content>
       </Layout>
 

@@ -66,14 +66,14 @@ export default function ActivityLogsPage() {
       width: 220,
       render: (_: any, record: any) => (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <Avatar size={30} style={{ background: '#1a56a0', fontSize: 12, flexShrink: 0 }}>
+          <Avatar size={30} style={{ background: 'var(--color-primary)', fontSize: 12, flexShrink: 0 }}>
             {record.user?.full_name?.[0]?.toUpperCase()}
           </Avatar>
           <div style={{ minWidth: 0 }}>
             <Text strong style={{ fontSize: 13 }} ellipsis={{ tooltip: record.user?.full_name }}>
               {record.user?.full_name}
             </Text>
-            <div style={{ fontSize: 11, color: '#94a3b8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            <div style={{ fontSize: 11, color: 'var(--color-text-tertiary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {record.user?.email}
             </div>
           </div>
@@ -138,14 +138,14 @@ export default function ActivityLogsPage() {
       <div className="page-header">
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <div style={{
-            width: 44, height: 44, borderRadius: 12, background: '#eff6ff',
+            width: 44, height: 44, borderRadius: 12, background: 'var(--color-primary-light)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}>
-            <AuditOutlined style={{ fontSize: 22, color: '#1a56a0' }} />
+            <AuditOutlined style={{ fontSize: 22, color: 'var(--color-primary)' }} />
           </div>
           <div>
             <h1 className="page-title" style={{ marginBottom: 0 }}>Nhật ký hoạt động</h1>
-            <p style={{ margin: 0, fontSize: 13, color: '#64748b' }}>
+            <p style={{ margin: 0, fontSize: 13, color: 'var(--color-text-secondary)' }}>
               Theo dõi thao tác trong hệ thống
             </p>
           </div>

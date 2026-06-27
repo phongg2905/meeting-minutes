@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { keepPreviousDataPlaceholder } from '../../utils/queryKeys'
 import { useNavigate } from 'react-router-dom'
 import { meetingMinutesService, minuteTypesService } from '../../services'
+import MeetingVisibilityToggle from '../../components/meeting/MeetingVisibilityToggle'
 import { useAuthStore } from '../../store/authStore'
 import { canWriteMinutes, formatDate, STATUS_LABELS, STATUS_COLORS, isAdmin, isMinuteManager } from '../../utils'
 import { MeetingMinute, MinuteType } from '../../types'
@@ -90,18 +91,6 @@ export default function MeetingsListPage() {
     },
     onError: (err: any) => {
       message.error(err?.response?.data?.message || 'Không thể cập nhật trạng thái')
-    },
-  })
-
-  const publicMutation = useMutation({
-    mutationFn: ({ id, isPublic }: { id: number; isPublic: boolean }) =>
-      meetingMinutesService.updatePublic(id, isPublic),
-    onSuccess: () => {
-      message.success('Cập nhật công khai thành công')
-      queryClient.invalidateQueries({ queryKey: ['meeting-minutes'] })
-    },
-    onError: (err: any) => {
-      message.error(err?.response?.data?.message || 'Không thể cập nhật công khai')
     },
   })
 
@@ -264,31 +253,16 @@ export default function MeetingsListPage() {
       title: 'Công khai',
       dataIndex: 'is_public',
       key: 'is_public',
-      width: 100,
+      width: 140,
       render: (value: boolean, record: MeetingMinute) => (
         <div style={{ display: 'flex', justifyContent: 'center' }}>
-          {(isAdmin(user?.role_id) || (isMinuteManager(user?.role_id) && record.created_by === user?.user_id)) ? (
-            <Tag
-              color={value ? 'success' : 'default'}
-              style={{
-                borderRadius: 6, cursor: 'pointer', fontWeight: 600, userSelect: 'none',
-                margin: 0, minWidth: 64, textAlign: 'center', display: 'flex', justifyContent: 'center',
-              }}
-              onClick={(e) => {
-                e.preventDefault()
-                publicMutation.mutate({ id: record.minute_id, isPublic: !value })
-              }}
-            >
-              {value ? 'Công khai' : 'Nội bộ'}
-            </Tag>
-          ) : (
-            <Tag
-              color={value ? 'success' : 'default'}
-              style={{ borderRadius: 6, margin: 0, minWidth: 44, textAlign: 'center', display: 'flex', justifyContent: 'center' }}
-            >
-              {value ? 'Có' : 'Không'}
-            </Tag>
-          )}
+          <MeetingVisibilityToggle
+            meetingId={record.minute_id}
+            meetingCode={record.minute_code}
+            meetingTitle={record.title}
+            isPublic={value}
+            canUpdate={isAdmin(user?.role_id) || (isMinuteManager(user?.role_id) && record.created_by === user?.user_id)}
+          />
         </div>
       ),
     },

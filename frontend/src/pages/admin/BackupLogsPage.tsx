@@ -175,7 +175,7 @@ export default function BackupLogsPage() {
       <div className="page-header">
         <div>
           <h1 className="page-title">Lịch sử backup</h1>
-          <p style={{ margin: 0, color: '#64748b', fontSize: 13 }}>
+          <p style={{ margin: 0, color: 'var(--color-text-secondary)', fontSize: 13 }}>
             Tạo bản sao lưu JSON của dữ liệu hệ thống và khôi phục từ các bản backup đã có.
           </p>
         </div>
@@ -202,11 +202,11 @@ export default function BackupLogsPage() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                   <div style={{
                     width: 40, height: 40, borderRadius: 10,
-                    background: statusData?.lastManualBackupAt ? '#f0fdf4' : '#fff7ed',
+                    background: statusData?.lastManualBackupAt ? 'var(--color-success-bg)' : 'var(--color-warning-bg)',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     flexShrink: 0,
                   }}>
-                    <DatabaseOutlined style={{ fontSize: 18, color: statusData?.lastManualBackupAt ? '#16a34a' : '#d97706' }} />
+                    <DatabaseOutlined style={{ fontSize: 18, color: statusData?.lastManualBackupAt ? 'var(--color-success)' : 'var(--color-warning)' }} />
                   </div>
                   <div style={{ minWidth: 0 }}>
                     <Text type="secondary" style={{ fontSize: 12 }}>
@@ -226,11 +226,11 @@ export default function BackupLogsPage() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                   <div style={{
                     width: 40, height: 40, borderRadius: 10,
-                    background: statusData?.lastAutoBackupAt ? '#f0f9ff' : '#f8fafc',
+                    background: statusData?.lastAutoBackupAt ? 'var(--color-primary-light)' : 'var(--color-surface-muted)',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     flexShrink: 0,
                   }}>
-                    <ClockCircleOutlined style={{ fontSize: 18, color: statusData?.lastAutoBackupAt ? '#2563eb' : '#94a3b8' }} />
+                    <ClockCircleOutlined style={{ fontSize: 18, color: statusData?.lastAutoBackupAt ? 'var(--color-primary)' : 'var(--color-text-tertiary)' }} />
                   </div>
                   <div style={{ minWidth: 0 }}>
                     <Text type="secondary" style={{ fontSize: 12 }}>
@@ -250,11 +250,11 @@ export default function BackupLogsPage() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                   <div style={{
                     width: 40, height: 40, borderRadius: 10,
-                    background: '#fef3c7',
+                    background: 'var(--color-warning-bg)',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     flexShrink: 0,
                   }}>
-                    <CalendarOutlined style={{ fontSize: 18, color: '#d97706' }} />
+                    <CalendarOutlined style={{ fontSize: 18, color: 'var(--color-warning)' }} />
                   </div>
                   <div style={{ minWidth: 0 }}>
                     <Text type="secondary" style={{ fontSize: 12 }}>Lịch tự động tiếp theo</Text>
@@ -270,11 +270,11 @@ export default function BackupLogsPage() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                   <div style={{
                     width: 40, height: 40, borderRadius: 10,
-                    background: '#f0fdf4',
+                    background: 'var(--color-success-bg)',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     flexShrink: 0,
                   }}>
-                    <DatabaseOutlined style={{ fontSize: 18, color: '#059669' }} />
+                    <DatabaseOutlined style={{ fontSize: 18, color: 'var(--color-success)' }} />
                   </div>
                   <div style={{ minWidth: 0 }}>
                     <Text type="secondary" style={{ fontSize: 12 }}>Tổng / Lưu giữ</Text>

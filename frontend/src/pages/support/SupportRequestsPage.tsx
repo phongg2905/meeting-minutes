@@ -83,7 +83,7 @@ export default function SupportRequestsPage() {
       render: (_: any, record: SupportRequest) => (
         <div>
           <Text strong>{record.title}</Text>
-          <div style={{ color: '#64748b', fontSize: 12 }}>{record.content}</div>
+          <div style={{ color: 'var(--color-text-secondary)', fontSize: 12 }}>{record.content}</div>
         </div>
       ),
     },

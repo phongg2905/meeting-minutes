@@ -38,8 +38,8 @@ export default function MeetingEditPage() {
         <Breadcrumb
           style={{ marginBottom: 16 }}
           items={[
-            { href: '/dashboard', title: <HomeOutlined style={{ color: 'var(--color-text-secondary)' }} /> },
-            { href: '/meetings', title: 'Biên bản họp' },
+            { title: <span onClick={() => navigate('/dashboard')} style={{ cursor: 'pointer' }}><HomeOutlined style={{ color: 'var(--color-text-secondary)' }} /></span> },
+            { title: <span onClick={() => navigate('/meetings')} style={{ cursor: 'pointer' }}>Biên bản họp</span> },
             { title: '...' },
             { title: 'Chỉnh sửa' },
           ]}
@@ -59,9 +59,9 @@ export default function MeetingEditPage() {
       <Breadcrumb
         style={{ marginBottom: 16 }}
         items={[
-          { href: '/dashboard', title: <HomeOutlined style={{ color: 'var(--color-text-secondary)' }} /> },
-          { href: '/meetings', title: 'Biên bản họp' },
-          { href: `/meetings/${id}`, title: minute?.minute_code },
+          { title: <span onClick={() => navigate('/dashboard')} style={{ cursor: 'pointer' }}><HomeOutlined style={{ color: 'var(--color-text-secondary)' }} /></span> },
+          { title: <span onClick={() => navigate('/meetings')} style={{ cursor: 'pointer' }}>Biên bản họp</span> },
+          { title: minute?.minute_code },
           { title: 'Chỉnh sửa' },
         ]}
       />
