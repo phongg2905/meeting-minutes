@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Empty, Spin } from 'antd'
 import { useEffect } from 'react'
 import { useParams } from 'react-router-dom'
+import { keepPreviousDataPlaceholder } from '../../utils/queryKeys'
 import MeetingMinuteDocumentView from '../../components/meeting/MeetingMinuteDocumentView'
 import { publicMeetingMinutesService } from '../../services'
 
@@ -18,6 +19,7 @@ export default function PublicMeetingPrintPage() {
     queryFn: () => publicMeetingMinutesService.getOne(Number(id)),
     enabled: !!id,
     retry: 1,
+    placeholderData: keepPreviousDataPlaceholder,
   })
 
   useEffect(() => {

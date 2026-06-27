@@ -1,9 +1,11 @@
 import { Button, Card, Input, message, Popconfirm, Space, Table, Tag, Tabs } from 'antd'
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { keepPreviousDataPlaceholder } from '../../utils/queryKeys'
 import { managerRoleRequestsService } from '../../services'
 import { ManagerRoleRequest } from '../../types'
 import { formatDateTime } from '../../utils'
+import { TableRefreshIndicator, TableSkeleton } from '../../components/common'
 
 const statusMap: Record<string, { label: string; color: string }> = {
   pending: { label: 'Đang chờ duyệt', color: 'warning' },
@@ -18,12 +20,16 @@ export default function ManagerRoleRequestsPage() {
   const pendingQuery = useQuery({
     queryKey: ['manager-role-requests', 'pending'],
     queryFn: managerRoleRequestsService.getPending,
+    placeholderData: keepPreviousDataPlaceholder,
   })
+  const hasPendingData = (pendingQuery.data?.length ?? 0) > 0
 
   const historyQuery = useQuery({
     queryKey: ['manager-role-requests', 'history'],
     queryFn: managerRoleRequestsService.getHistory,
+    placeholderData: keepPreviousDataPlaceholder,
   })
+  const hasHistoryData = (historyQuery.data?.length ?? 0) > 0
 
   const reviewMutation = useMutation({
     mutationFn: ({ id, status }: { id: number; status: string }) =>
@@ -149,29 +155,37 @@ export default function ManagerRoleRequestsPage() {
             {
               key: 'pending',
               label: `Chờ duyệt (${pendingQuery.data?.length || 0})`,
-              children: (
-                <Table<ManagerRoleRequest>
-                  dataSource={pendingQuery.data || []}
-                  columns={pendingColumns}
-                  rowKey="request_id"
-                  loading={pendingQuery.isLoading}
-                  locale={{ emptyText: 'Không có yêu cầu chờ duyệt' }}
-                  scroll={{ x: 1000 }}
-                />
+              children: pendingQuery.isLoading && !hasPendingData ? (
+                <TableSkeleton rows={4} columns={[{ width: 200 }, { width: 200 }, { width: 130 }, { width: 170 }, { width: 200 }, { width: 160 }]} />
+              ) : (
+                <>
+                  <TableRefreshIndicator visible={pendingQuery.isFetching && hasPendingData} />
+                  <Table<ManagerRoleRequest>
+                    dataSource={pendingQuery.data || []}
+                    columns={pendingColumns}
+                    rowKey="request_id"
+                    locale={{ emptyText: 'Không có yêu cầu chờ duyệt' }}
+                    scroll={{ x: 1000 }}
+                  />
+                </>
               ),
             },
             {
               key: 'history',
               label: `Lịch sử duyệt (${historyQuery.data?.length || 0})`,
-              children: (
-                <Table<ManagerRoleRequest>
-                  dataSource={historyQuery.data || []}
-                  columns={historyColumns}
-                  rowKey="request_id"
-                  loading={historyQuery.isLoading}
-                  locale={{ emptyText: 'Chưa có lịch sử duyệt' }}
-                  scroll={{ x: 900 }}
-                />
+              children: historyQuery.isLoading && !hasHistoryData ? (
+                <TableSkeleton rows={4} columns={[{ width: 200 }, { width: 130 }, { width: 150 }, { width: 160 }, { width: 170 }]} />
+              ) : (
+                <>
+                  <TableRefreshIndicator visible={historyQuery.isFetching && hasHistoryData} />
+                  <Table<ManagerRoleRequest>
+                    dataSource={historyQuery.data || []}
+                    columns={historyColumns}
+                    rowKey="request_id"
+                    locale={{ emptyText: 'Chưa có lịch sử duyệt' }}
+                    scroll={{ x: 900 }}
+                  />
+                </>
               ),
             },
           ]}

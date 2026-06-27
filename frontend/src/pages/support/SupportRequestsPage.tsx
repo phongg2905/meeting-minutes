@@ -2,9 +2,11 @@ import { useState } from 'react'
 import { Button, Card, DatePicker, Form, Input, message, Modal, Select, Space, Table, Tag, Typography } from 'antd'
 import { PlusOutlined, SearchOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { keepPreviousDataPlaceholder } from '../../utils/queryKeys'
 import { supportRequestsService } from '../../services'
 import { useAuthStore } from '../../store/authStore'
 import { formatDateTime, isAdmin } from '../../utils'
+import { TableRefreshIndicator, TableSkeleton } from '../../components/common'
 import { SupportRequest } from '../../types'
 
 const { Text } = Typography
@@ -29,7 +31,7 @@ export default function SupportRequestsPage() {
   const [dateRange, setDateRange] = useState<any>(null)
   const [form] = Form.useForm()
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isFetching } = useQuery({
     queryKey: ['support-requests', { page, search, statusFilter, dateRange }],
     queryFn: () => supportRequestsService.getAll({
       page,
@@ -39,7 +41,9 @@ export default function SupportRequestsPage() {
       date_from: dateRange?.[0]?.format('YYYY-MM-DD'),
       date_to: dateRange?.[1]?.format('YYYY-MM-DD'),
     }),
+    placeholderData: keepPreviousDataPlaceholder,
   })
+  const hasExistingData = (data?.data?.length ?? 0) > 0
 
   const createMutation = useMutation({
     mutationFn: supportRequestsService.create,
@@ -158,20 +162,26 @@ export default function SupportRequestsPage() {
       </Card>
 
       <Card>
-        <Table
-          dataSource={data?.data || []}
-          columns={columns}
-          rowKey="request_id"
-          loading={isLoading}
-          pagination={{
-            current: page,
-            pageSize: 10,
-            total: data?.total || 0,
-            showTotal: (t) => `Tổng ${t} yêu cầu`,
-            onChange: setPage,
-            showSizeChanger: false,
-          }}
-        />
+        {isLoading && !hasExistingData ? (
+          <TableSkeleton rows={5} columns={[{ width: '30%' }, { width: 120 }, { width: 130 }, { width: '20%' }, { width: 170 }]} />
+        ) : (
+          <>
+            <TableRefreshIndicator visible={isFetching && hasExistingData} />
+            <Table
+              dataSource={data?.data || []}
+              columns={columns}
+              rowKey="request_id"
+              pagination={{
+                current: page,
+                pageSize: 10,
+                total: data?.total || 0,
+                showTotal: (t) => `Tổng ${t} yêu cầu`,
+                onChange: setPage,
+                showSizeChanger: false,
+              }}
+            />
+          </>
+        )}
       </Card>
 
       <Modal title="Tạo yêu cầu ho tro" open={modalOpen} onCancel={() => setModalOpen(false)} footer={null}>

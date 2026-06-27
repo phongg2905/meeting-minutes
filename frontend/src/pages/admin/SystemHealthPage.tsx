@@ -1,5 +1,6 @@
-import { Card, Col, Descriptions, Row, Spin, Statistic, Tag } from 'antd'
+import { Card, Col, Descriptions, Row, Statistic, Tag } from 'antd'
 import { useQuery } from '@tanstack/react-query'
+import { keepPreviousDataPlaceholder } from '../../utils/queryKeys'
 import { healthService } from '../../services'
 import { formatDateTime } from '../../utils'
 
@@ -8,9 +9,10 @@ export default function SystemHealthPage() {
     queryKey: ['health'],
     queryFn: healthService.get,
     refetchInterval: 30000,
+    placeholderData: keepPreviousDataPlaceholder,
   })
 
-  if (isLoading) return <Spin />
+  if (isLoading) return <div style={{ padding: 24 }}><Row gutter={[16, 16]}>{Array.from({ length: 4 }).map((_, i) => (<Col xs={24} md={6} key={i}><Card bodyStyle={{ padding: 20 }}><div className="skeleton-box" style={{ height: 12, width: '60%', marginBottom: 12, borderRadius: 4 }} /><div className="skeleton-box" style={{ height: 28, width: '40%', borderRadius: 6 }} /></Card></Col>))}</Row><Card bodyStyle={{ padding: 20 }} style={{ marginTop: 16 }}><div className="skeleton-box" style={{ height: 12, width: '30%', marginBottom: 16, borderRadius: 4 }} /><div className="skeleton-box" style={{ height: 14, width: '50%', borderRadius: 4 }} /></Card></div>
 
   return (
     <div>

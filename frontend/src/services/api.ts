@@ -13,9 +13,20 @@ export const publicApi = axios.create({
   timeout: 15000,
 })
 
-export function handleUnauthorizedResponse(redirect: (path: string) => void = (path) => window.location.replace(path)) {
+// Cho phép React set navigate function để tránh window.location.replace (full page reload)
+let _customNavigate: ((path: string) => void) | null = null
+
+export function setNavigateFn(navigate: (path: string) => void) {
+  _customNavigate = navigate
+}
+
+export function handleUnauthorizedResponse() {
   resetAuthState()
-  redirect('/login')
+  if (_customNavigate) {
+    _customNavigate('/login')
+  } else {
+    window.location.replace('/login')
+  }
 }
 
 api.interceptors.request.use((config) => {

@@ -1,5 +1,6 @@
-import { lazy, Suspense } from 'react'
-import { Routes, Route, Navigate } from 'react-router-dom'
+import { lazy, Suspense, useEffect } from 'react'
+import { Routes, Route, Navigate, useNavigate } from 'react-router-dom'
+import { setNavigateFn } from './services/api'
 import { useAuthStore } from './store/authStore'
 
 const MainLayout = lazy(() => import('./components/layout/MainLayout'))
@@ -33,11 +34,26 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
   return user?.role_id === 1 ? <>{children}</> : <Navigate to="/dashboard" replace />
 }
 
+function NavigateSetter() {
+  const navigate = useNavigate()
+  useEffect(() => {
+    setNavigateFn(navigate)
+  }, [navigate])
+  return null
+}
+
 export default function App() {
   const { isAuthenticated } = useAuthStore()
 
   return (
-    <Suspense fallback={<div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', color: '#1a56a0', fontWeight: 600 }}>Đang tải...</div>}>
+    <Suspense fallback={
+      <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, background: 'var(--color-bg)', padding: 24 }}>
+        <div className="skeleton-box" style={{ width: 48, height: 48, borderRadius: 16 }} />
+        <div className="skeleton-box" style={{ width: 200, height: 20, borderRadius: 6 }} />
+        <div className="skeleton-box" style={{ width: 280, height: 14, borderRadius: 4 }} />
+      </div>
+    }>
+      <NavigateSetter />
       <Routes>
         <Route path="/" element={<Navigate to={isAuthenticated ? '/dashboard' : '/public/meetings'} replace />} />
         <Route path="/public/meetings" element={<PublicMeetingsListPage />} />

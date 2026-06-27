@@ -7,6 +7,7 @@ import {
   FileTextOutlined
 } from '@ant-design/icons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { keepPreviousDataPlaceholder } from '../../utils/queryKeys'
 import { useNavigate, useParams } from 'react-router-dom'
 import type React from 'react'
 import { useRef, useState } from 'react'
@@ -20,6 +21,7 @@ import {
 } from '../../utils'
 import MeetingMinuteDocumentView from '../../components/meeting/MeetingMinuteDocumentView'
 import { STRUCTURED_TEMPLATE_SECTIONS, type TemplateField } from '../../utils/minuteTemplates'
+import { DetailSkeleton } from '../../components/common'
 
 const { Title, Text, Paragraph } = Typography
 
@@ -44,7 +46,7 @@ function renderTemplateField(field: TemplateField, data: Record<string, any>) {
 
     return (
       <div key={field.name} style={{ marginBottom: 16 }}>
-        <Text strong style={{ display: 'block', marginBottom: 8, color: '#0f2644' }}>{field.label}</Text>
+        <Text strong style={{ display: 'block', marginBottom: 8, color: 'var(--color-text)' }}>{field.label}</Text>
         <Table
           bordered
           size="small"
@@ -64,8 +66,8 @@ function renderTemplateField(field: TemplateField, data: Record<string, any>) {
 
   return (
     <div key={field.name} style={{ marginBottom: 16 }}>
-      <Text strong style={{ display: 'block', marginBottom: 6, color: '#0f2644' }}>{field.label}</Text>
-      <Paragraph style={{ background: '#f8fafc', padding: '12px 16px', borderRadius: 8, margin: 0, whiteSpace: 'pre-wrap' }}>
+      <Text strong style={{ display: 'block', marginBottom: 6, color: 'var(--color-text)' }}>{field.label}</Text>
+      <Paragraph style={{ background: 'var(--color-surface-muted)', padding: '12px 16px', borderRadius: 8, margin: 0, whiteSpace: 'pre-wrap' }}>
         {String(value)}
       </Paragraph>
     </div>
@@ -83,6 +85,7 @@ export default function MeetingDetailPage() {
     queryKey: ['meeting-minute', id],
     queryFn: () => meetingMinutesService.getOne(Number(id)),
     enabled: !!id,
+    placeholderData: keepPreviousDataPlaceholder,
   })
 
   const deleteMutation = useMutation({
@@ -116,8 +119,12 @@ export default function MeetingDetailPage() {
     },
   })
 
-  if (isLoading) return <div style={{ textAlign: 'center', padding: 80 }}><Spin size="large" /></div>
-  if (!minute) return <Empty description="Không tìm thấy biên bản" />
+  if (isLoading) return <DetailSkeleton />
+  if (!minute) return (
+    <div style={{ padding: 48 }}>
+      <Empty description="Không tìm thấy biên bản" />
+    </div>
+  )
 
   const canEdit = canWriteMinutes(user?.role_id) && (isAdmin(user?.role_id) || minute.created_by === user?.user_id)
   const structuredSections = STRUCTURED_TEMPLATE_SECTIONS[minute.type_id] || []
@@ -133,7 +140,7 @@ export default function MeetingDetailPage() {
       key: 'attendance_status',
       render: (status: string) => {
         const colors: Record<string, string> = { present: 'success', absent: 'error', late: 'warning' }
-        return <Tag color={colors[status] || 'default'}>{ATTENDANCE_LABELS[status] || status}</Tag>
+        return <Tag color={colors[status] || 'default'} style={{ borderRadius: 6 }}>{ATTENDANCE_LABELS[status] || status}</Tag>
       },
     },
   ]
@@ -147,7 +154,7 @@ export default function MeetingDetailPage() {
       title: 'Trạng thái',
       dataIndex: 'task_status',
       key: 'task_status',
-      render: (status: string) => <Tag color={TASK_STATUS_COLORS[status]}>{TASK_STATUS_LABELS[status] || status}</Tag>,
+      render: (status: string) => <Tag color={TASK_STATUS_COLORS[status]} style={{ borderRadius: 6 }}>{TASK_STATUS_LABELS[status] || status}</Tag>,
     },
   ]
 
@@ -168,8 +175,15 @@ export default function MeetingDetailPage() {
       label: <span><InfoCircleOutlined /> Thông tin</span>,
       children: (
         <div>
-          <Descriptions bordered column={{ xs: 1, sm: 2, md: 3 }} size="small" style={{ marginBottom: 24 }}>
-            <Descriptions.Item label="Mã biên bản"><Text strong style={{ color: '#1a56a0' }}>{minute.minute_code}</Text></Descriptions.Item>
+          <Descriptions
+            bordered
+            column={{ xs: 1, sm: 2, md: 3 }}
+            size="small"
+            style={{ marginBottom: 24 }}
+          >
+            <Descriptions.Item label="Mã biên bản">
+              <Text strong style={{ color: 'var(--color-primary)' }}>{minute.minute_code}</Text>
+            </Descriptions.Item>
             <Descriptions.Item label="Loại biên bản">{minute.minute_type?.type_name}</Descriptions.Item>
             <Descriptions.Item label="Tên lớp">{minute.class_name}</Descriptions.Item>
             <Descriptions.Item label="Ngày họp">{formatDate(minute.meeting_date)}</Descriptions.Item>
@@ -184,23 +198,23 @@ export default function MeetingDetailPage() {
           </Descriptions>
 
           {minute.attendee_summary && (
-            <Card size="small" style={{ marginBottom: 12, borderRadius: 8, background: '#f0fdf4' }}>
+            <Card size="small" style={{ marginBottom: 12, borderRadius: 10, background: 'var(--color-success-bg)', border: 'none' }}>
               <Text strong>Thành phần có mặt:</Text>
               <Paragraph style={{ margin: '4px 0 0' }}>{minute.attendee_summary}</Paragraph>
             </Card>
           )}
           {minute.absentee_summary && (
-            <Card size="small" style={{ marginBottom: 12, borderRadius: 8, background: '#fef9c3' }}>
+            <Card size="small" style={{ marginBottom: 12, borderRadius: 10, background: 'var(--color-warning-bg)', border: 'none' }}>
               <Text strong>Thành phần vắng mặt:</Text>
               <Paragraph style={{ margin: '4px 0 0' }}>{minute.absentee_summary}</Paragraph>
             </Card>
           )}
 
-          <Divider orientation="left">Nội dung theo cấu trúc biểu mẫu</Divider>
+          <Divider orientation="left" style={{ fontSize: 14, color: 'var(--color-text)' }}>Nội dung theo cấu trúc biểu mẫu</Divider>
           {minute.purpose && (
             <div style={{ marginBottom: 16 }}>
-              <Text strong style={{ display: 'block', marginBottom: 6, color: '#0f2644' }}>Mục đích:</Text>
-              <Paragraph style={{ background: '#f8fafc', padding: '12px 16px', borderRadius: 8, margin: 0 }}>{minute.purpose}</Paragraph>
+              <Text strong style={{ display: 'block', marginBottom: 6, color: 'var(--color-text)' }}>Mục đích:</Text>
+              <Paragraph style={{ background: 'var(--color-surface-muted)', padding: '12px 16px', borderRadius: 8, margin: 0 }}>{minute.purpose}</Paragraph>
             </div>
           )}
           {structuredSections.length ? (
@@ -213,7 +227,7 @@ export default function MeetingDetailPage() {
 
               return (
                 <div key={section.title} style={{ marginBottom: 20 }}>
-                  <Divider orientation="left" style={{ marginTop: 8, fontSize: 14 }}>
+                  <Divider orientation="left" style={{ marginTop: 8, fontSize: 14, color: 'var(--color-text)' }}>
                     {section.title}
                   </Divider>
                   {fields}
@@ -222,20 +236,20 @@ export default function MeetingDetailPage() {
             })
           ) : (
             <div style={{ marginBottom: 16 }}>
-              <Text strong style={{ display: 'block', marginBottom: 6, color: '#0f2644' }}>Nội dung:</Text>
-              <Paragraph style={{ background: '#f8fafc', padding: '12px 16px', borderRadius: 8, margin: 0, whiteSpace: 'pre-wrap' }}>{minute.discussion_content}</Paragraph>
+              <Text strong style={{ display: 'block', marginBottom: 6, color: 'var(--color-text)' }}>Nội dung:</Text>
+              <Paragraph style={{ background: 'var(--color-surface-muted)', padding: '12px 16px', borderRadius: 8, margin: 0, whiteSpace: 'pre-wrap' }}>{minute.discussion_content}</Paragraph>
             </div>
           )}
           {minute.conclusion_content && (
             <div style={{ marginBottom: 16 }}>
-              <Text strong style={{ display: 'block', marginBottom: 6, color: '#0f2644' }}>Kết luận / ý kiến góp ý:</Text>
-              <Paragraph style={{ background: '#f0fdf4', padding: '12px 16px', borderRadius: 8, margin: 0, whiteSpace: 'pre-wrap' }}>{minute.conclusion_content}</Paragraph>
+              <Text strong style={{ display: 'block', marginBottom: 6, color: 'var(--color-text)' }}>Kết luận / ý kiến góp ý:</Text>
+              <Paragraph style={{ background: 'var(--color-success-bg)', padding: '12px 16px', borderRadius: 8, margin: 0, whiteSpace: 'pre-wrap' }}>{minute.conclusion_content}</Paragraph>
             </div>
           )}
           {minute.followup_summary && (
             <div>
-              <Text strong style={{ display: 'block', marginBottom: 6, color: '#0f2644' }}>Theo dõi tiếp / kiến nghị:</Text>
-              <Paragraph style={{ background: '#fffbeb', padding: '12px 16px', borderRadius: 8, margin: 0, whiteSpace: 'pre-wrap' }}>{minute.followup_summary}</Paragraph>
+              <Text strong style={{ display: 'block', marginBottom: 6, color: 'var(--color-text)' }}>Theo dõi tiếp / kiến nghị:</Text>
+              <Paragraph style={{ background: 'var(--color-warning-bg)', padding: '12px 16px', borderRadius: 8, margin: 0, whiteSpace: 'pre-wrap' }}>{minute.followup_summary}</Paragraph>
             </div>
           )}
         </div>
@@ -266,30 +280,52 @@ export default function MeetingDetailPage() {
           {canEdit && (
             <div>
               <input ref={fileInputRef} type="file" hidden onChange={handleFileChange} />
-              <Button icon={<UploadOutlined />} onClick={() => fileInputRef.current?.click()} loading={uploadAttachmentMutation.isPending}>
+              <Button
+                icon={<UploadOutlined />}
+                onClick={() => fileInputRef.current?.click()}
+                loading={uploadAttachmentMutation.isPending}
+                style={{ borderRadius: 10, fontWeight: 600 }}
+              >
                 Tải tệp lên
               </Button>
             </div>
           )}
 
           {minute.attachments?.length ? minute.attachments.map((att: any) => (
-            <Card key={att.attachment_id} size="small" style={{ borderRadius: 8 }}>
+            <Card
+              key={att.attachment_id}
+              size="small"
+              style={{ borderRadius: 12, border: '1px solid var(--color-border-light)' }}
+            >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
                 <div>
-                  <Text strong>{att.file_name}</Text>
-                  <div style={{ fontSize: 12, color: '#94a3b8' }}>
-                    {att.file_type || 'unknown'} - {att.uploader?.full_name} - {formatDateTime(att.uploaded_at)}
+                  <Text strong style={{ color: 'var(--color-text)' }}>{att.file_name}</Text>
+                  <div style={{ fontSize: 12, color: 'var(--color-text-tertiary)', marginTop: 2 }}>
+                    {att.file_type || 'unknown'} — {att.uploader?.full_name} — {formatDateTime(att.uploaded_at)}
                   </div>
                 </div>
                 <Space>
-                  <Button icon={<DownloadOutlined />} onClick={() => minuteAttachmentsService.download(att.attachment_id, att.file_name)}>
+                  <Button
+                    icon={<DownloadOutlined />}
+                    size="small"
+                    onClick={() => minuteAttachmentsService.download(att.attachment_id, att.file_name)}
+                    style={{ borderRadius: 8 }}
+                  >
                     Tải xuống
                   </Button>
                   {canEdit && (
-                    <Popconfirm title="Xóa tệp đính kèm này?" onConfirm={() => deleteAttachmentMutation.mutate(att.attachment_id)} okText="Xóa" cancelText="Hủy" okButtonProps={{ danger: true }}>
-                      <Button danger icon={<DeleteOutlined />} loading={deleteAttachmentMutation.isPending}>
-                        Xóa
-                      </Button>
+                    <Popconfirm
+                      title="Xóa tệp đính kèm này?"
+                      onConfirm={() => deleteAttachmentMutation.mutate(att.attachment_id)}
+                      okText="Xóa" cancelText="Hủy" okButtonProps={{ danger: true }}
+                    >
+                      <Button
+                        danger
+                        icon={<DeleteOutlined />}
+                        size="small"
+                        loading={deleteAttachmentMutation.isPending}
+                        style={{ borderRadius: 8 }}
+                      />
                     </Popconfirm>
                   )}
                 </Space>
@@ -306,24 +342,40 @@ export default function MeetingDetailPage() {
       <Breadcrumb
         style={{ marginBottom: 16 }}
         items={[
-          { href: '/dashboard', title: <HomeOutlined /> },
+          { href: '/dashboard', title: <HomeOutlined style={{ color: 'var(--color-text-secondary)' }} /> },
           { href: '/meetings', title: 'Biên bản họp' },
           { title: minute.minute_code },
         ]}
       />
 
-      <Card style={{ marginBottom: 16, borderRadius: 12, boxShadow: '0 1px 8px rgba(0,0,0,0.06)' }}>
+      {/* Header Card */}
+      <Card
+        style={{
+          marginBottom: 16,
+          borderRadius: 16,
+          border: '1px solid var(--color-border-light)',
+        }}
+        bodyStyle={{ padding: '18px 20px' }}
+      >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8, flexWrap: 'wrap' }}>
-              <Tag color="blue">{minute.minute_code}</Tag>
-              <Tag color={STATUS_COLORS[minute.status]}>{STATUS_LABELS[minute.status] || minute.status}</Tag>
-              <Tag color={minute.is_public ? 'success' : 'default'}>{minute.is_public ? 'Công khai' : 'Nội bộ'}</Tag>
-              <Tag color="purple">{minute.minute_type?.type_name}</Tag>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
+              <Tag color="blue" style={{ borderRadius: 6, fontWeight: 700 }}>
+                {minute.minute_code}
+              </Tag>
+              <Tag color={STATUS_COLORS[minute.status] || 'default'} style={{ borderRadius: 6 }}>
+                {STATUS_LABELS[minute.status] || minute.status}
+              </Tag>
+              <Tag color={minute.is_public ? 'success' : 'default'} style={{ borderRadius: 6 }}>
+                {minute.is_public ? 'Công khai' : 'Nội bộ'}
+              </Tag>
+              <Tag color="purple" style={{ borderRadius: 6 }}>
+                {minute.minute_type?.type_name}
+              </Tag>
             </div>
-            <Title level={4} style={{ margin: '0 0 6px', color: '#0f2644' }}>{minute.title}</Title>
-            <Space size={16} wrap style={{ color: '#64748b', fontSize: 13 }}>
-              <span>Lớp: <strong>{minute.class_name}</strong></span>
+            <Title level={4} style={{ margin: '0 0 6px', color: 'var(--color-text)' }}>{minute.title}</Title>
+            <Space size={16} wrap style={{ color: 'var(--color-text-secondary)', fontSize: 13 }}>
+              <span>Lớp: <strong style={{ color: 'var(--color-text)' }}>{minute.class_name}</strong></span>
               <span>{formatDate(minute.meeting_date)}</span>
               <span>{formatTime(minute.start_time)} - {formatTime(minute.end_time)}</span>
               {minute.location && <span>{minute.location}</span>}
@@ -331,20 +383,42 @@ export default function MeetingDetailPage() {
           </div>
 
           <Space>
-            <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/meetings')}>Quay lại</Button>
-            <Button icon={<PrinterOutlined />} onClick={handleExportPdf}>Xuất PDF</Button>
+            <Button
+              icon={<ArrowLeftOutlined />}
+              onClick={() => navigate('/meetings')}
+              style={{ borderRadius: 10 }}
+            >
+              Quay lại
+            </Button>
+            <Button
+              icon={<PrinterOutlined />}
+              onClick={handleExportPdf}
+              style={{ borderRadius: 10 }}
+            >
+              Xuất PDF
+            </Button>
             {canEdit && (
               <>
-                <Button type="primary" icon={<EditOutlined />} onClick={() => navigate(`/meetings/${id}/edit`)}>Chỉnh sửa</Button>
+                <Button
+                  type="primary"
+                  icon={<EditOutlined />}
+                  onClick={() => navigate(`/meetings/${id}/edit`)}
+                  style={{ borderRadius: 10, fontWeight: 600 }}
+                >
+                  Chỉnh sửa
+                </Button>
                 <Popconfirm
                   title="Xóa biên bản này?"
                   description="Hành động này không thể hoàn tác"
                   onConfirm={() => deleteMutation.mutate()}
-                  okText="Xóa"
-                  cancelText="Hủy"
-                  okButtonProps={{ danger: true }}
+                  okText="Xóa" cancelText="Hủy" okButtonProps={{ danger: true }}
                 >
-                  <Button danger icon={<DeleteOutlined />} loading={deleteMutation.isPending}>Xóa</Button>
+                  <Button
+                    danger
+                    icon={<DeleteOutlined />}
+                    loading={deleteMutation.isPending}
+                    style={{ borderRadius: 10 }}
+                  />
                 </Popconfirm>
               </>
             )}
@@ -352,10 +426,15 @@ export default function MeetingDetailPage() {
         </div>
       </Card>
 
-      <Card style={{ borderRadius: 12, boxShadow: '0 1px 8px rgba(0,0,0,0.06)' }}>
+      {/* Content Tabs */}
+      <Card
+        style={{
+          borderRadius: 16,
+          border: '1px solid var(--color-border-light)',
+        }}
+      >
         <Tabs items={tabItems} defaultActiveKey="document" />
       </Card>
-
     </div>
   )
 }

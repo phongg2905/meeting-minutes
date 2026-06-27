@@ -1,9 +1,11 @@
 import { Breadcrumb, Spin, message } from 'antd'
 import { HomeOutlined, EditOutlined } from '@ant-design/icons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { keepPreviousDataPlaceholder } from '../../utils/queryKeys'
 import { useNavigate, useParams } from 'react-router-dom'
 import MeetingForm from '../../components/meeting/MeetingForm'
 import { meetingMinutesService } from '../../services'
+import { PageHeader, FormSkeleton } from '../../components/common'
 
 export default function MeetingEditPage() {
   const { id } = useParams<{ id: string }>()
@@ -14,6 +16,7 @@ export default function MeetingEditPage() {
     queryKey: ['meeting-minute', id],
     queryFn: () => meetingMinutesService.getOne(Number(id)),
     enabled: !!id,
+    placeholderData: keepPreviousDataPlaceholder,
   })
 
   const updateMutation = useMutation({
@@ -29,27 +32,44 @@ export default function MeetingEditPage() {
     },
   })
 
-  if (isLoading) return <div style={{ textAlign: 'center', padding: 80 }}><Spin size="large" /></div>
+  if (isLoading) {
+    return (
+      <div>
+        <Breadcrumb
+          style={{ marginBottom: 16 }}
+          items={[
+            { href: '/dashboard', title: <HomeOutlined style={{ color: 'var(--color-text-secondary)' }} /> },
+            { href: '/meetings', title: 'Biên bản họp' },
+            { title: '...' },
+            { title: 'Chỉnh sửa' },
+          ]}
+        />
+        <PageHeader
+          title="Chỉnh sửa biên bản"
+          subtitle="Đang tải dữ liệu..."
+          icon={<EditOutlined />}
+        />
+        <FormSkeleton fields={8} />
+      </div>
+    )
+  }
 
   return (
     <div>
       <Breadcrumb
         style={{ marginBottom: 16 }}
         items={[
-          { href: '/dashboard', title: <HomeOutlined /> },
+          { href: '/dashboard', title: <HomeOutlined style={{ color: 'var(--color-text-secondary)' }} /> },
           { href: '/meetings', title: 'Biên bản họp' },
           { href: `/meetings/${id}`, title: minute?.minute_code },
           { title: 'Chỉnh sửa' },
         ]}
       />
-      <div className="page-header">
-        <div>
-          <h1 className="page-title"><EditOutlined /> Chỉnh sửa biên bản</h1>
-          <p style={{ margin: 0, color: '#64748b', fontSize: 13 }}>
-            Mã: <strong>{minute?.minute_code}</strong>
-          </p>
-        </div>
-      </div>
+      <PageHeader
+        title="Chỉnh sửa biên bản"
+        subtitle={`Mã: ${minute?.minute_code}`}
+        icon={<EditOutlined />}
+      />
 
       <MeetingForm
         mode="edit"

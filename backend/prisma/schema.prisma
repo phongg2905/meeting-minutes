@@ -17,34 +17,34 @@ model Role {
 }
 
 model User {
-  user_id                   Int                     @id @default(autoincrement())
+  user_id                   Int                  @id @default(autoincrement())
   role_id                   Int
-  full_name                 String                  @db.VarChar(100)
-  email                     String                  @unique @db.VarChar(100)
-  password_hash             String                  @db.VarChar(255)
-  phone                     String?                 @db.VarChar(20)
-  status                    String                  @default("active") @db.VarChar(20)
-  created_at                DateTime                @default(now())
-  updated_at                DateTime?               @updatedAt
-  password_reset_code_hash     String?              @db.VarChar(255)
-  password_reset_expires_at    DateTime?
-  register_otp_hash            String?              @db.VarChar(255)
-  register_otp_expires_at      DateTime?
-  email_verified_at            DateTime?
+  full_name                 String               @db.VarChar(100)
+  email                     String               @unique @db.VarChar(100)
+  password_hash             String               @db.VarChar(255)
+  phone                     String?              @db.VarChar(20)
+  status                    String               @default("active") @db.VarChar(20)
+  created_at                DateTime             @default(now())
+  updated_at                DateTime?            @updatedAt
+  password_reset_code_hash  String?              @db.VarChar(255)
+  password_reset_expires_at DateTime?
+  email_verified_at         DateTime?
+  register_otp_expires_at   DateTime?
+  register_otp_hash         String?              @db.VarChar(255)
   activity_logs             ActivityLog[]
   backup_logs               BackupLog[]
-  reviewed_manager_requests ManagerRoleRequest[]    @relation("ManagerRoleReviewer")
-  manager_requests          ManagerRoleRequest[]    @relation("ManagerRoleRequester")
+  reviewed_manager_requests ManagerRoleRequest[] @relation("ManagerRoleReviewer")
+  manager_requests          ManagerRoleRequest[] @relation("ManagerRoleRequester")
   meeting_minutes           MeetingMinute[]
   minute_attachments        MinuteAttachment[]
-  handled_tickets           SupportTicket[]         @relation("HandledTickets")
-  resolved_tickets          SupportTicket[]         @relation("ResolvedTickets")
-  assigned_tickets          SupportTicket[]         @relation("AssignedTickets")
-  support_tickets           SupportTicket[]         @relation("RequestedSupport")
-  support_messages          SupportMessage[]
-  support_attachments       SupportAttachment[]
   notifications             Notification[]
-  role                      Role                    @relation(fields: [role_id], references: [role_id])
+  support_attachments       SupportAttachment[]
+  support_messages          SupportMessage[]
+  assigned_tickets          SupportTicket[]      @relation("AssignedTickets")
+  handled_tickets           SupportTicket[]      @relation("HandledTickets")
+  support_tickets           SupportTicket[]      @relation("RequestedSupport")
+  resolved_tickets          SupportTicket[]      @relation("ResolvedTickets")
+  role                      Role                 @relation(fields: [role_id], references: [role_id])
 
   @@map("users")
 }
@@ -77,15 +77,15 @@ model MeetingMinute {
   discussion_content String
   conclusion_content String?
   followup_summary   String?
-  template_data      Json?
   status             String              @default("draft") @db.VarChar(20)
-  reviewed_by        Int?
-  reviewed_at        DateTime?
-  review_note        String?
   created_at         DateTime            @default(now())
   updated_at         DateTime?           @updatedAt
   is_public          Boolean             @default(false)
   published_at       DateTime?
+  reviewed_by        Int?
+  reviewed_at        DateTime?
+  review_note        String?
+  template_data      Json?
   creator            User                @relation(fields: [created_by], references: [user_id])
   minute_type        MinuteType          @relation(fields: [type_id], references: [type_id])
   attachments        MinuteAttachment[]
@@ -125,9 +125,9 @@ model MinuteAttachment {
   file_name          String        @db.VarChar(255)
   file_path          String        @db.VarChar(255)
   file_type          String?       @db.VarChar(50)
+  uploaded_at        DateTime      @default(now())
   is_public_safe     Boolean       @default(false)
   public_scan_status String        @default("pending") @db.VarChar(30)
-  uploaded_at        DateTime      @default(now())
   minute             MeetingMinute @relation(fields: [minute_id], references: [minute_id], onDelete: Cascade)
   uploader           User          @relation(fields: [uploaded_by], references: [user_id])
 
@@ -159,60 +159,56 @@ model BackupLog {
   @@map("backup_logs")
 }
 
-// ============================================================
-// Renamed from SupportRequest — giữ @@map("support_requests")
-// để không phá vỡ dữ liệu cũ và các migration hiện có.
-// ============================================================
 model SupportTicket {
-  ticket_id       Int       @id @default(autoincrement()) @map("request_id")
+  ticket_id       Int              @id @default(autoincrement()) @map("request_id")
   requested_by    Int?
-  title           String    @db.VarChar(255)
+  title           String           @db.VarChar(255)
   content         String
-  category        String?   @db.VarChar(100)
-  status          String    @default("PENDING") @db.VarChar(20)
-  response        String?                         // Giữ tương thích ngược — không dùng trong logic mới
-  resolution      String?                         // Nội dung xử lý cuối cùng
-  assigned_admin  Int?                            // Admin được gán xử lý
+  status          String           @default("PENDING") @db.VarChar(20)
+  response        String?
   handled_by      Int?
+  created_at      DateTime         @default(now())
+  updated_at      DateTime?        @updatedAt
+  category        String?          @db.VarChar(100)
+  resolution      String?
+  assigned_admin  Int?
   resolved_by     Int?
   resolved_at     DateTime?
   last_message_at DateTime?
-  created_at      DateTime  @default(now())
-  updated_at      DateTime? @updatedAt
-  handler         User?     @relation("HandledTickets", fields: [handled_by], references: [user_id])
-  resolver        User?     @relation("ResolvedTickets", fields: [resolved_by], references: [user_id])
-  assignee        User?     @relation("AssignedTickets", fields: [assigned_admin], references: [user_id])
-  requester       User?     @relation("RequestedSupport", fields: [requested_by], references: [user_id])
   messages        SupportMessage[]
+  assignee        User?            @relation("AssignedTickets", fields: [assigned_admin], references: [user_id])
+  handler         User?            @relation("HandledTickets", fields: [handled_by], references: [user_id])
+  requester       User?            @relation("RequestedSupport", fields: [requested_by], references: [user_id])
+  resolver        User?            @relation("ResolvedTickets", fields: [resolved_by], references: [user_id])
 
   @@map("support_requests")
 }
 
 model SupportMessage {
-  message_id   Int       @id @default(autoincrement())
-  ticket_id    Int
-  sender_id    Int
-  sender_type  String    @db.VarChar(10)    // "USER" | "ADMIN"
-  content      String
-  created_at   DateTime  @default(now())
-  ticket       SupportTicket @relation(fields: [ticket_id], references: [ticket_id], onDelete: Cascade)
-  sender       User      @relation(fields: [sender_id], references: [user_id])
-  attachments  SupportAttachment[]
+  message_id  Int                 @id @default(autoincrement())
+  ticket_id   Int
+  sender_id   Int
+  sender_type String              @db.VarChar(10)
+  content     String
+  created_at  DateTime            @default(now())
+  attachments SupportAttachment[]
+  sender      User                @relation(fields: [sender_id], references: [user_id])
+  ticket      SupportTicket       @relation(fields: [ticket_id], references: [ticket_id], onDelete: Cascade)
 
   @@map("support_messages")
 }
 
 model SupportAttachment {
-  attachment_id Int       @id @default(autoincrement())
+  attachment_id Int            @id @default(autoincrement())
   message_id    Int
-  file_name     String    @db.VarChar(255)
-  file_path     String    @db.VarChar(255)
-  file_type     String?   @db.VarChar(50)
+  file_name     String         @db.VarChar(255)
+  file_path     String         @db.VarChar(255)
+  file_type     String?        @db.VarChar(50)
   file_size     Int?
   uploaded_by   Int?
-  created_at    DateTime  @default(now())
+  created_at    DateTime       @default(now())
   message       SupportMessage @relation(fields: [message_id], references: [message_id], onDelete: Cascade)
-  uploader      User?     @relation(fields: [uploaded_by], references: [user_id])
+  uploader      User?          @relation(fields: [uploaded_by], references: [user_id])
 
   @@map("support_attachments")
 }

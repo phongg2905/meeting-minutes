@@ -1,9 +1,11 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { keepPreviousDataPlaceholder } from '../../utils/queryKeys'
 import { backupLogsService } from '../../services'
 import { Button, Card, Col, DatePicker, Input, Popconfirm, Row, Select, Space, Table, Tag, Tooltip, Typography, message } from 'antd'
 import { DatabaseOutlined, ClockCircleOutlined, CalendarOutlined, DeleteOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons'
 import { formatDateTime } from '../../utils'
+import { TableRefreshIndicator, TableSkeleton } from '../../components/common'
 
 const { Text } = Typography
 const { RangePicker } = DatePicker
@@ -15,7 +17,7 @@ export default function BackupLogsPage() {
   const [actionType, setActionType] = useState<string>()
   const [dateRange, setDateRange] = useState<any>(null)
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isFetching } = useQuery({
     queryKey: ['backup-logs', { page, search, actionType, dateRange }],
     queryFn: () => backupLogsService.getAll({
       page,
@@ -25,7 +27,9 @@ export default function BackupLogsPage() {
       date_from: dateRange?.[0]?.format('YYYY-MM-DD'),
       date_to: dateRange?.[1]?.format('YYYY-MM-DD'),
     }),
+    placeholderData: keepPreviousDataPlaceholder,
   })
+  const hasExistingData = (data?.data?.length ?? 0) > 0
 
   const { data: statusData } = useQuery({
     queryKey: ['backup-logs-status'],
@@ -314,21 +318,27 @@ export default function BackupLogsPage() {
       </Card>
 
       <Card style={{ boxShadow: '0 1px 6px rgba(0,0,0,0.05)' }}>
-        <Table
-          dataSource={data?.data || []}
-          columns={columns}
-          rowKey="backup_id"
-          loading={isLoading}
-          pagination={{
-            current: page,
-            pageSize: 10,
-            total: data?.total || 0,
-            showTotal: (t) => `Tổng ${t} bản ghi`,
-            onChange: setPage,
-            showSizeChanger: false,
-          }}
-          scroll={{ x: 900 }}
-        />
+        {isLoading && !hasExistingData ? (
+          <TableSkeleton rows={5} columns={[{ width: 140 }, { width: 200 }, { width: '25%' }, { width: 160 }, { width: 150 }, { width: 120 }]} />
+        ) : (
+          <>
+            <TableRefreshIndicator visible={isFetching && hasExistingData} />
+            <Table
+              dataSource={data?.data || []}
+              columns={columns}
+              rowKey="backup_id"
+              pagination={{
+                current: page,
+                pageSize: 10,
+                total: data?.total || 0,
+                showTotal: (t) => `Tổng ${t} bản ghi`,
+                onChange: setPage,
+                showSizeChanger: false,
+              }}
+              scroll={{ x: 900 }}
+            />
+          </>
+        )}
       </Card>
     </div>
   )

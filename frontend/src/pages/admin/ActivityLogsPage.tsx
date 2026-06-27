@@ -2,11 +2,24 @@ import { useState } from 'react'
 import { Table, Card, Tag, Typography, Avatar, Row, Col, Input, Select, DatePicker } from 'antd'
 import { AuditOutlined, SearchOutlined } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
+import { keepPreviousDataPlaceholder } from '../../utils/queryKeys'
 import { activityLogsService } from '../../services'
 import { formatDateTime } from '../../utils'
+import { TableRefreshIndicator, TableSkeleton } from '../../components/common'
 
 const { Text } = Typography
 const { RangePicker } = DatePicker
+
+const TABLE_OPTIONS = [
+  { value: 'users', label: 'users' },
+  { value: 'meeting_minutes', label: 'meeting_minutes' },
+  { value: 'minute_tasks', label: 'minute_tasks' },
+  { value: 'minute_participants', label: 'minute_participants' },
+  { value: 'minute_attachments', label: 'minute_attachments' },
+  { value: 'support_requests', label: 'support_requests' },
+  { value: 'manager_role_requests', label: 'manager_role_requests' },
+  { value: 'backup_logs', label: 'backup_logs' },
+]
 
 const ACTION_COLORS: Record<string, string> = {
   CREATE: 'success',
@@ -30,7 +43,7 @@ export default function ActivityLogsPage() {
   const [targetTable, setTargetTable] = useState<string>()
   const [dateRange, setDateRange] = useState<any>(null)
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isFetching } = useQuery({
     queryKey: ['activity-logs', { page, search, actionName, targetTable, dateRange }],
     queryFn: () => activityLogsService.getAll({
       page,
@@ -42,7 +55,9 @@ export default function ActivityLogsPage() {
       date_to: dateRange?.[1]?.format('YYYY-MM-DD'),
     }),
     refetchInterval: 30000,
+    placeholderData: keepPreviousDataPlaceholder,
   })
+  const hasExistingData = (data?.data?.length ?? 0) > 0
 
   const columns = [
     {
@@ -159,11 +174,17 @@ export default function ActivityLogsPage() {
             />
           </Col>
           <Col xs={24} md={5}>
-            <Input
-              placeholder="Bảng dữ liệu"
+            <Select
+              placeholder="Tìm hoặc chọn bảng dữ liệu"
+              showSearch
               value={targetTable}
-              onChange={(e) => { setTargetTable(e.target.value || undefined); setPage(1) }}
+              onChange={(value) => { setTargetTable(value); setPage(1) }}
               allowClear
+              style={{ width: '100%' }}
+              options={TABLE_OPTIONS}
+              filterOption={(input, option) =>
+                (option?.label as string)?.toLowerCase().includes(input.toLowerCase())
+              }
             />
           </Col>
           <Col xs={24} md={6}>
@@ -178,21 +199,27 @@ export default function ActivityLogsPage() {
       </Card>
 
       <Card style={{ boxShadow: '0 1px 6px rgba(0,0,0,0.05)' }}>
-        <Table
-          dataSource={data?.data || []}
-          columns={columns}
-          rowKey="log_id"
-          loading={isLoading}
-          scroll={{ x: 900 }}
-          pagination={{
-            current: page,
-            pageSize: 20,
-            total: data?.total || 0,
-            showTotal: (t) => `Tổng ${t} bản ghi`,
-            onChange: setPage,
-            showSizeChanger: false,
-          }}
-        />
+        {isLoading && !hasExistingData ? (
+          <TableSkeleton rows={8} columns={[{ width: 220 }, { width: 160 }, { width: 160 }, { width: '30%' }, { width: 150 }]} />
+        ) : (
+          <>
+            <TableRefreshIndicator visible={isFetching && hasExistingData} />
+            <Table
+              dataSource={data?.data || []}
+              columns={columns}
+              rowKey="log_id"
+              scroll={{ x: 900 }}
+              pagination={{
+                current: page,
+                pageSize: 20,
+                total: data?.total || 0,
+                showTotal: (t) => `Tổng ${t} bản ghi`,
+                onChange: setPage,
+                showSizeChanger: false,
+              }}
+            />
+          </>
+        )}
       </Card>
     </div>
   )

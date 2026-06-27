@@ -1,9 +1,11 @@
 import { Button, Card, Form, Input, message, Table, Tag, Typography } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { keepPreviousDataPlaceholder } from '../../utils/queryKeys'
 import { managerRoleRequestsService } from '../../services'
 import { ManagerRoleRequest } from '../../types'
 import { formatDateTime, isMinuteManager } from '../../utils'
 import { useAuthStore } from '../../store/authStore'
+import { TableRefreshIndicator, TableSkeleton } from '../../components/common'
 
 const { TextArea } = Input
 const { Text } = Typography
@@ -20,10 +22,12 @@ export default function ManagerRoleRequestPage() {
   const { user } = useAuthStore()
   const alreadyManager = isMinuteManager(user?.role_id)
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isFetching } = useQuery({
     queryKey: ['manager-role-requests'],
     queryFn: managerRoleRequestsService.getAll,
+    placeholderData: keepPreviousDataPlaceholder,
   })
+  const hasExistingData = (data?.length ?? 0) > 0
 
   const createMutation = useMutation({
     mutationFn: managerRoleRequestsService.create,
@@ -84,12 +88,18 @@ export default function ManagerRoleRequestPage() {
       </Card>
 
       <Card>
-        <Table<ManagerRoleRequest>
-          dataSource={data || []}
-          columns={columns}
-          rowKey="request_id"
-          loading={isLoading}
-        />
+        {isLoading && !hasExistingData ? (
+          <TableSkeleton rows={4} columns={[{ width: 170 }, { width: '30%' }, { width: 130 }, { width: 150 }]} />
+        ) : (
+          <>
+            <TableRefreshIndicator visible={isFetching && hasExistingData} />
+            <Table<ManagerRoleRequest>
+              dataSource={data || []}
+              columns={columns}
+              rowKey="request_id"
+            />
+          </>
+        )}
       </Card>
     </div>
   )

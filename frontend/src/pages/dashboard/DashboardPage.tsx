@@ -1,30 +1,34 @@
-import { Row, Col, Card, Typography, Table, Tag, Spin, Empty } from 'antd'
+import { Row, Col, Card, Typography, Table, Tag, Spin, Empty, Button, Space } from 'antd'
 import {
   FileTextOutlined, CheckCircleOutlined, EyeOutlined,
-  RiseOutlined, CalendarOutlined
+  RiseOutlined, PlusOutlined, ArrowRightOutlined, UserOutlined, ClockCircleOutlined,
 } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
+import { keepPreviousDataPlaceholder } from '../../utils/queryKeys'
 import { useNavigate } from 'react-router-dom'
 import { meetingMinutesService, activityLogsService } from '../../services'
 import { useAuthStore } from '../../store/authStore'
-import { formatDate, formatDateTime, STATUS_LABELS, STATUS_COLORS, isAdmin } from '../../utils'
+import { formatDate, formatDateTime, STATUS_LABELS, STATUS_COLORS, isAdmin, canWriteMinutes } from '../../utils'
 import { MeetingMinute } from '../../types'
+import { StatCard, StatCardSkeleton, TableSkeleton, ListSkeleton } from '../../components/common'
 
-const { Text } = Typography
+const { Text, Title } = Typography
 
 export default function DashboardPage() {
   const navigate = useNavigate()
   const { user } = useAuthStore()
 
-  const { data: minutesData, isLoading } = useQuery({
+  const { data: minutesData, isLoading, isError, refetch } = useQuery({
     queryKey: ['meeting-minutes', 'dashboard', user?.user_id],
     queryFn: () => meetingMinutesService.getAll({ limit: 100 }),
+    placeholderData: keepPreviousDataPlaceholder,
   })
 
   const { data: logsData } = useQuery({
     queryKey: ['activity-logs'],
     queryFn: () => activityLogsService.getAll({ page: 1, limit: 8 }),
     enabled: isAdmin(user?.role_id),
+    placeholderData: keepPreviousDataPlaceholder,
   })
   const recentLogs = logsData?.data || []
 
@@ -37,127 +41,181 @@ export default function DashboardPage() {
   }
 
   const recentMinutes = minutes.slice(0, 5)
-  const statCards = [
-    { title: 'Tổng biên bản', value: stats.total, icon: <FileTextOutlined />, color: '#1a56a0', bg: '#eff6ff' },
-    { title: 'Công khai', value: stats.public, icon: <CheckCircleOutlined />, color: '#16a34a', bg: '#f0fdf4' },
-    { title: 'Nội bộ', value: stats.private, icon: <EyeOutlined />, color: '#d97706', bg: '#fffbeb' },
-    { title: 'Đang chỉnh sửa', value: stats.editing, icon: <CalendarOutlined />, color: '#7c3aed', bg: '#f5f3ff' },
-  ]
 
   const columns = [
     {
       title: 'Mã biên bản',
       dataIndex: 'minute_code',
       key: 'minute_code',
+      width: 130,
       render: (code: string, record: MeetingMinute) => (
-        <a onClick={() => navigate(`/meetings/${record.minute_id}`)} style={{ fontWeight: 600, color: '#1a56a0' }}>
+        <span
+          onClick={() => navigate(`/meetings/${record.minute_id}`)}
+          style={{ fontWeight: 700, color: 'var(--color-primary)', cursor: 'pointer' }}
+        >
           {code}
-        </a>
+        </span>
       ),
     },
-    { title: 'Tiêu đề', dataIndex: 'title', key: 'title', ellipsis: true },
-    { title: 'Lớp', dataIndex: 'class_name', key: 'class_name', width: 100 },
-    { title: 'Ngày họp', dataIndex: 'meeting_date', key: 'meeting_date', width: 110, render: (d: string) => formatDate(d) },
+    {
+      title: 'Tiêu đề',
+      dataIndex: 'title',
+      key: 'title',
+      ellipsis: true,
+      render: (title: string, record: MeetingMinute) => (
+        <div>
+          <div style={{ fontWeight: 500, fontSize: 13, color: 'var(--color-text)' }}>{title}</div>
+          <div style={{ fontSize: 11, color: 'var(--color-text-tertiary)' }}>Lớp: {record.class_name}</div>
+        </div>
+      ),
+    },
+    {
+      title: 'Ngày họp',
+      dataIndex: 'meeting_date',
+      key: 'meeting_date',
+      width: 100,
+      render: (d: string) => (
+        <span style={{ fontSize: 12, whiteSpace: 'nowrap', color: 'var(--color-text-secondary)' }}>
+          {formatDate(d)}
+        </span>
+      ),
+    },
     {
       title: 'Trạng thái',
       dataIndex: 'status',
       key: 'status',
       width: 120,
-      render: (s: string) => <Tag color={STATUS_COLORS[s]}>{STATUS_LABELS[s] || s}</Tag>,
-    },
-    {
-      title: 'Công khai',
-      dataIndex: 'is_public',
-      key: 'is_public',
-      width: 100,
-      render: (value: boolean) => <Tag color={value ? 'success' : 'default'}>{value ? 'Có' : 'Không'}</Tag>,
+      render: (s: string) => (
+        <Tag
+          color={STATUS_COLORS[s] || 'default'}
+          style={{ borderRadius: 6, fontWeight: 600, fontSize: 11 }}
+        >
+          {STATUS_LABELS[s] || s}
+        </Tag>
+      ),
     },
   ]
 
-  if (isLoading) return <div style={{ textAlign: 'center', padding: 80 }}><Spin size="large" /></div>
+  // Loading state: show skeleton for all sections
+  if (isLoading) {
+    return (
+      <div>
+        <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', color: 'var(--color-text-tertiary)', marginBottom: 4 }}>
+          TỔNG QUAN
+        </div>
+        <div className="page-header">
+          <div>
+            <div className="skeleton-box" style={{ height: 28, width: 280, marginBottom: 8, borderRadius: 6 }} />
+            <div className="skeleton-box" style={{ height: 14, width: 340, borderRadius: 4 }} />
+          </div>
+        </div>
+        <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Col xs={24} sm={12} lg={6} key={i}>
+              <StatCardSkeleton />
+            </Col>
+          ))}
+        </Row>
+        <Row gutter={[16, 16]}>
+          <Col xs={24} lg={isAdmin(user?.role_id) ? 15 : 24}>
+            <TableSkeleton rows={5} />
+          </Col>
+          {isAdmin(user?.role_id) && (
+            <Col xs={24} lg={9}>
+              <Card style={{ borderRadius: 16, border: '1px solid var(--color-border-light)' }} bodyStyle={{ padding: 0 }}>
+                <ListSkeleton rows={5} />
+              </Card>
+            </Col>
+          )}
+        </Row>
+      </div>
+    )
+  }
+
+  if (isError) {
+    return (
+      <div>
+        <div className="page-header">
+          <h1 className="page-title">Tổng quan</h1>
+        </div>
+        <Card style={{ textAlign: 'center', padding: 48, borderRadius: 16 }}>
+          <div style={{ width: 64, height: 64, borderRadius: 20, background: 'var(--color-danger-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px', fontSize: 28, color: 'var(--color-danger)' }}>!</div>
+          <h3 style={{ color: 'var(--color-text)' }}>Không thể tải dữ liệu</h3>
+          <p style={{ color: 'var(--color-text-secondary)' }}>Có lỗi xảy ra khi tải tổng quan.</p>
+          <Button onClick={() => refetch()} style={{ borderRadius: 10, fontWeight: 600 }}>Thử lại</Button>
+        </Card>
+      </div>
+    )
+  }
 
   return (
     <div>
+      <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', color: 'var(--color-text-tertiary)', marginBottom: 4 }}>
+        TỔNG QUAN
+      </div>
       <div className="page-header">
         <div>
-          <h1 className="page-title">Tổng quan</h1>
-          <Text type="secondary">Xin chào, <strong>{user?.full_name}</strong></Text>
+          <Title level={3} style={{ margin: 0, fontWeight: 800, color: 'var(--color-text)' }}>
+            Xin chào, {user?.full_name?.split(' ').pop() || 'Người dùng'}
+          </Title>
+          <Text style={{ color: 'var(--color-text-secondary)', fontSize: 14, marginTop: 4, display: 'block' }}>
+            Chào mừng bạn quay trở lại. Dưới đây là tổng quan hệ thống.
+          </Text>
         </div>
+        {canWriteMinutes(user?.role_id) && (
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/meetings/create')} size="large" style={{ borderRadius: 12, fontWeight: 700, height: 48, paddingInline: 24, fontSize: 15, boxShadow: '0 4px 14px rgba(37, 99, 235, 0.3)' }}>
+            Tạo biên bản mới
+          </Button>
+        )}
       </div>
 
       <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
-        {statCards.map((card) => (
-          <Col xs={24} sm={12} lg={6} key={card.title}>
-            <Card className="stat-card" style={{ background: card.bg }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <div>
-                  <Text type="secondary" style={{ fontSize: 13 }}>{card.title}</Text>
-                  <div style={{ fontSize: 32, fontWeight: 800, color: card.color, lineHeight: 1.2, marginTop: 4 }}>
-                    {card.value}
-                  </div>
-                </div>
-                <div style={{
-                  width: 52, height: 52, borderRadius: 14,
-                  background: card.color, color: '#fff',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 22,
-                }}>
-                  {card.icon}
-                </div>
-              </div>
-            </Card>
-          </Col>
-        ))}
+        <Col xs={24} sm={12} lg={6}><StatCard title="Tổng biên bản" value={stats.total} icon={<FileTextOutlined />} color="#2563EB" /></Col>
+        <Col xs={24} sm={12} lg={6}><StatCard title="Đang chỉnh sửa" value={stats.editing} icon={<EyeOutlined />} color="#D97706" /></Col>
+        <Col xs={24} sm={12} lg={6}><StatCard title="Công khai" value={stats.public} icon={<CheckCircleOutlined />} color="#16A34A" onClick={() => navigate('/public/meetings')} /></Col>
+        <Col xs={24} sm={12} lg={6}><StatCard title="Nội bộ" value={stats.private} icon={<RiseOutlined />} color="#7C3AED" /></Col>
       </Row>
 
       <Row gutter={[16, 16]}>
-        <Col xs={24} lg={isAdmin(user?.role_id) ? 14 : 24}>
-          <Card
-            title={<span style={{ fontWeight: 700 }}>Biên bản gần đây</span>}
-            extra={<a onClick={() => navigate('/meetings')}>Xem tat ca</a>}
-            style={{ boxShadow: '0 1px 8px rgba(0,0,0,0.06)' }}
+        <Col xs={24} lg={isAdmin(user?.role_id) ? 15 : 24}>
+          <Card title={<div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><FileTextOutlined style={{ color: 'var(--color-primary)' }} /><span style={{ fontWeight: 700, fontSize: 15 }}>Biên bản gần đây</span></div>}
+            extra={<Button type="link" onClick={() => navigate('/meetings')} style={{ fontSize: 13, fontWeight: 600 }}>Xem tất cả <ArrowRightOutlined /></Button>}
+            bodyStyle={{ padding: 0 }}
           >
             {recentMinutes.length === 0 ? (
-              <Empty description="Chưa có biên bản nao" />
+              <div style={{ padding: 32 }}><Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={<span style={{ color: 'var(--color-text-secondary)' }}>Chưa có biên bản nào</span>}>
+                {canWriteMinutes(user?.role_id) && <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/meetings/create')}>Tạo biên bản đầu tiên</Button>}
+              </Empty></div>
             ) : (
-              <Table
-                dataSource={recentMinutes}
-                columns={columns}
-                rowKey="minute_id"
-                pagination={false}
-                size="small"
-                scroll={{ x: 700 }}
-              />
+              <Table dataSource={recentMinutes} columns={columns} rowKey="minute_id" pagination={false} size="middle" scroll={{ x: 600 }} locale={{ emptyText: <Empty description="Chưa có dữ liệu" /> }} />
             )}
           </Card>
         </Col>
-
         {isAdmin(user?.role_id) && (
-          <Col xs={24} lg={10}>
-            <Card title={<span style={{ fontWeight: 700 }}>Hoạt động gần đây</span>} style={{ boxShadow: '0 1px 8px rgba(0,0,0,0.06)' }}>
-              {recentLogs.map((log: any) => (
-                <div key={log.log_id} style={{
-                  display: 'flex', gap: 10, alignItems: 'flex-start',
-                  padding: '8px 0', borderBottom: '1px solid #f1f5f9',
-                }}>
-                  <div style={{
-                    width: 32, height: 32, borderRadius: '50%',
-                    background: '#eff6ff', color: '#1a56a0',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: 14, flexShrink: 0,
-                  }}>
-                    <RiseOutlined />
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <Text strong style={{ fontSize: 12 }}>{log.user?.full_name}</Text>
-                    <Text type="secondary" style={{ fontSize: 12 }}> - {log.action_detail}</Text>
-                    <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>
-                      {formatDateTime(log.created_at)}
+          <Col xs={24} lg={9}>
+            <Card title={<div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><RiseOutlined style={{ color: 'var(--color-primary)' }} /><span style={{ fontWeight: 700, fontSize: 15 }}>Hoạt động gần đây</span></div>} bodyStyle={{ padding: 0 }}>
+              {recentLogs.length === 0 ? (
+                <div style={{ padding: 32 }}><Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Chưa có hoạt động" /></div>
+              ) : (
+                <div style={{ padding: '8px 0' }}>
+                  {recentLogs.map((log: any, index: number) => (
+                    <div key={log.log_id} style={{ display: 'flex', gap: 12, alignItems: 'flex-start', padding: '10px 16px', borderBottom: index < recentLogs.length - 1 ? '1px solid var(--color-border-light)' : 'none', transition: 'background var(--transition-fast)' }}
+                      className="activity-log-item"
+                    >
+                      <div style={{ width: 32, height: 32, borderRadius: 10, background: 'var(--color-primary-light)', color: 'var(--color-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, flexShrink: 0, marginTop: 2 }}>
+                        <UserOutlined />
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <Text strong style={{ fontSize: 12, color: 'var(--color-text)' }}>{log.user?.full_name}</Text>
+                        <Text style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}> — {log.action_detail}</Text>
+                        <div style={{ fontSize: 11, color: 'var(--color-text-tertiary)', marginTop: 2, display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <ClockCircleOutlined style={{ fontSize: 10 }} />{formatDateTime(log.created_at)}
+                        </div>
+                      </div>
                     </div>
-                  </div>
+                  ))}
                 </div>
-              ))}
-              {!recentLogs.length && <Empty description="Chưa có hoạt động" />}
+              )}
             </Card>
           </Col>
         )}
