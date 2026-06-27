@@ -255,7 +255,7 @@ export default function MeetingForm({ initialValues, onSubmit, loading, mode = '
       </Form.Item>
 
       <Card style={{ marginBottom: 16, borderRadius: 12 }}>
-        <Title level={5} style={{ color: '#0f2644', marginBottom: 20 }}>Thông tin cơ bản</Title>
+        <Title level={5} style={{ color: 'var(--color-text)', marginBottom: 20 }}>Thông tin cơ bản</Title>
         <Row gutter={[16, 0]}>
           <Col xs={24} md={12}>
             <Form.Item
@@ -345,7 +345,7 @@ export default function MeetingForm({ initialValues, onSubmit, loading, mode = '
       </Card>
 
       <Card style={{ marginBottom: 16, borderRadius: 12 }}>
-        <Title level={5} style={{ color: '#0f2644', marginBottom: 20 }}>Thành phần dự họp</Title>
+        <Title level={5} style={{ color: 'var(--color-text)', marginBottom: 20 }}>Thành phần dự họp</Title>
         <Row gutter={[16, 0]}>
           <Col xs={24} md={12}>
             <Form.Item label="Tóm tắt thành phần có mặt" name="attendee_summary">
@@ -359,7 +359,7 @@ export default function MeetingForm({ initialValues, onSubmit, loading, mode = '
           </Col>
         </Row>
 
-        <Divider orientation="left" style={{ fontSize: 13, color: '#64748b' }}>Danh sách tham dự</Divider>
+        <Divider orientation="left" style={{ fontSize: 13, color: 'var(--color-text-secondary)' }}>Danh sách tham dự</Divider>
         <Form.List name="participants">
           {(fields, { add, remove }) => (
             <>
@@ -381,7 +381,7 @@ export default function MeetingForm({ initialValues, onSubmit, loading, mode = '
       </Card>
 
       <Card style={{ marginBottom: 16, borderRadius: 12 }}>
-        <Title level={5} style={{ color: '#0f2644', marginBottom: 20 }}>Nội dung cuộc họp</Title>
+        <Title level={5} style={{ color: 'var(--color-text)', marginBottom: 20 }}>Nội dung cuộc họp</Title>
         <Form.Item label="Mục đích cuộc họp" name="purpose">
           <TextArea autoSize={{ minRows: 2 }} />
         </Form.Item>
@@ -389,7 +389,7 @@ export default function MeetingForm({ initialValues, onSubmit, loading, mode = '
       </Card>
 
       <Card style={{ marginBottom: 24, borderRadius: 12 }}>
-        <Title level={5} style={{ color: '#0f2644', marginBottom: 20 }}>Nhiệm vụ được giao</Title>
+        <Title level={5} style={{ color: 'var(--color-text)', marginBottom: 20 }}>Nhiệm vụ được giao</Title>
         <Form.List name="tasks">
           {(fields, { add, remove }) => (
             <>
@@ -425,7 +425,7 @@ export default function MeetingForm({ initialValues, onSubmit, loading, mode = '
       <Card style={{ marginBottom: 24, borderRadius: 12 }}>
         <Space direction="vertical" size={12} style={{ width: '100%' }}>
           <div>
-            <Title level={5} style={{ color: '#0f2644', marginBottom: 4 }}>Xem trước biểu mẫu</Title>
+            <Title level={5} style={{ color: 'var(--color-text)', marginBottom: 4 }}>Xem trước biểu mẫu</Title>
             <Text type="secondary">Bản xem trước dùng cùng dữ liệu với phần xuất PDF ở trang chi tiết.</Text>
           </div>
           <MinuteDocumentPreview

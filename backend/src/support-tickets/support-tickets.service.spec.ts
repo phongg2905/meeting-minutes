@@ -415,27 +415,35 @@ describe('SupportTicketsService', () => {
       expect(result.status).toBe('COMPLETED');
     });
 
-    it('should throw when completing a PENDING ticket', async () => {
+    it('should complete even from PENDING status', async () => {
       prisma.supportTicket.findUnique.mockResolvedValue(mockTicket);
 
-      await expect(
-        service.complete(1, mockAdmin.user_id, ROLE_ADMIN, {
-          resolution: 'Quick fix',
-        }),
-      ).rejects.toThrow(BadRequestException);
+      const result = await service.complete(1, mockAdmin.user_id, ROLE_ADMIN, {
+        resolution: 'Quick fix',
+      });
+
+      expect(result.status).toBe('COMPLETED');
     });
 
-    it('should throw when completing a WAITING_FOR_USER ticket', async () => {
+    it('should complete even from WAITING_FOR_USER status', async () => {
       prisma.supportTicket.findUnique.mockResolvedValue({
         ...mockTicket,
         status: 'WAITING_FOR_USER',
       });
 
-      await expect(
-        service.complete(1, mockAdmin.user_id, ROLE_ADMIN, {
-          resolution: 'Done',
+      const result = await service.complete(1, mockAdmin.user_id, ROLE_ADMIN, {
+        resolution: 'Done',
+      });
+
+      expect(prisma.supportTicket.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            status: 'COMPLETED',
+            resolution: 'Done',
+          }),
         }),
-      ).rejects.toThrow(BadRequestException);
+      );
+      expect(result.status).toBe('COMPLETED');
     });
 
     it('should throw when completing already COMPLETED ticket', async () => {

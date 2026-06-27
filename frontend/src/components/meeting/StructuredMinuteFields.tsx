@@ -20,7 +20,7 @@ export default function StructuredMinuteFields({ typeId }: Props) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       {sections.map((section) => (
         <Card key={section.title} size="small" style={{ borderRadius: 8 }}>
-          <Text strong style={{ display: 'block', marginBottom: 12, color: '#0f2644' }}>
+          <Text strong style={{ display: 'block', marginBottom: 12, color: 'var(--color-text)' }}>
             {section.title}
           </Text>
           <Row gutter={[16, 0]}>

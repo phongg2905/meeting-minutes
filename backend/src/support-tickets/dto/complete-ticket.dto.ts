@@ -1,7 +1,10 @@
-import { IsString, MinLength } from 'class-validator';
+import { IsNotEmpty, IsString, MaxLength } from 'class-validator';
 
 export class CompleteTicketDto {
   @IsString()
-  @MinLength(5)
+  @IsNotEmpty({ message: 'Nội dung kết quả xử lý không được để trống' })
+  @MaxLength(2000, {
+    message: 'Nội dung kết quả xử lý không được vượt quá 2000 ký tự',
+  })
   resolution: string;
 }

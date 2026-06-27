@@ -105,7 +105,7 @@ export default function UsersPage() {
       key: 'user',
       render: (_: any, record: User) => (
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <Avatar style={{ background: '#1a56a0', flexShrink: 0 }}>
+          <Avatar style={{ background: 'var(--color-primary)', flexShrink: 0 }}>
             {record.full_name?.[0]?.toUpperCase()}
           </Avatar>
           <div>

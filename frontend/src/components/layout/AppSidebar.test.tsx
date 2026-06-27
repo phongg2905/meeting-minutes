@@ -27,6 +27,7 @@ describe('AppSidebar layout widths', () => {
     afterEach(() => {
         useAuthStore.setState({ user: null, token: null, isAuthenticated: false })
     })
+
     const renderSidebar = (collapsed: boolean, initialEntry = '/') =>
         render(
             <QueryClientProvider client={queryClient}>
@@ -71,5 +72,29 @@ describe('AppSidebar layout widths', () => {
 
         expect(createButton).toHaveStyle({ background: 'var(--color-primary-light)' })
         expect(listButton).not.toHaveStyle({ background: 'var(--color-primary-light)' })
+    })
+
+    it('SidebarBadge: không render badge khi count bằng 0', () => {
+        useAuthStore.setState({
+            user: { user_id: 1, full_name: 'Admin', role_id: 1, role: { role_id: 1, role_name: 'Admin' }, email: 'admin@test.com', status: 'active', created_at: '' } as any,
+            token: 'token',
+            isAuthenticated: true,
+        })
+        const { container } = renderSidebar(false)
+        // Khi count = 0, không có badge nào hiển thị
+        const badges = container.querySelectorAll('[aria-label*="thông báo"]')
+        expect(badges.length).toBe(0)
+    })
+
+    it('user không có quyền admin không thấy badge quản trị', () => {
+        useAuthStore.setState({
+            user: { user_id: 3, full_name: 'Student', role_id: 3, role: { role_id: 3, role_name: 'Student' }, email: 'student@test.com', status: 'active', created_at: '' } as any,
+            token: 'token',
+            isAuthenticated: true,
+        })
+        renderSidebar(false)
+        // Student không thấy menu Quản trị
+        expect(screen.queryByText('Quản trị')).toBeNull()
+        expect(screen.queryByText('Người dùng')).toBeNull()
     })
 })

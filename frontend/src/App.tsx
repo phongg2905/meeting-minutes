@@ -3,7 +3,7 @@ import { Routes, Route, Navigate, useNavigate } from 'react-router-dom'
 import { setNavigateFn } from './services/api'
 import { useAuthStore } from './store/authStore'
 
-const MainLayout = lazy(() => import('./components/layout/MainLayout'))
+import MainLayout from './components/layout/MainLayout'
 const LoginPage = lazy(() => import('./pages/auth/LoginPage'))
 const DashboardPage = lazy(() => import('./pages/dashboard/DashboardPage'))
 const MeetingsListPage = lazy(() => import('./pages/meetings/MeetingsListPage'))

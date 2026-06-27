@@ -45,7 +45,7 @@ export default function ProfilePage() {
           <Card style={{ textAlign: 'center', borderRadius: 12, boxShadow: '0 1px 8px rgba(0,0,0,0.06)' }}>
             <Avatar
               size={96}
-              style={{ background: 'linear-gradient(135deg, #1a56a0, #2563eb)', fontSize: 36, marginBottom: 16 }}
+              style={{ background: 'linear-gradient(135deg, var(--color-primary), var(--color-primary-hover))', fontSize: 36, marginBottom: 16 }}
             >
               {user?.full_name?.[0]?.toUpperCase()}
             </Avatar>
@@ -57,7 +57,7 @@ export default function ProfilePage() {
               </Tag>
             </div>
             <Divider />
-            <div style={{ textAlign: 'left', fontSize: 13, color: '#64748b', lineHeight: 2 }}>
+            <div style={{ textAlign: 'left', fontSize: 13, color: 'var(--color-text-secondary)', lineHeight: 2 }}>
               <div>Điện thoại: {user?.phone || 'Chưa cập nhật'}</div>
               <div>Tham gia: {formatDateTime(user?.created_at)}</div>
               <div>Trạng thái: <Tag color="success">Hoạt động</Tag></div>

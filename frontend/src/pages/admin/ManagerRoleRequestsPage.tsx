@@ -49,7 +49,7 @@ export default function ManagerRoleRequestsPage() {
       render: (_: any, record: ManagerRoleRequest) => (
         <div>
           <strong>{record.user?.full_name}</strong>
-          <div style={{ color: '#64748b', fontSize: 12 }}>{record.user?.email}</div>
+          <div style={{ color: 'var(--color-text-secondary)', fontSize: 12 }}>{record.user?.email}</div>
         </div>
       ),
     },
@@ -115,7 +115,7 @@ export default function ManagerRoleRequestsPage() {
       render: (_: any, record: ManagerRoleRequest) => (
         <div>
           <strong>{record.user?.full_name}</strong>
-          <div style={{ color: '#64748b', fontSize: 12 }}>{record.user?.email}</div>
+          <div style={{ color: 'var(--color-text-secondary)', fontSize: 12 }}>{record.user?.email}</div>
         </div>
       ),
     },

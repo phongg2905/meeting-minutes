@@ -43,12 +43,18 @@ const BREADCRUMB_MAP: Record<string, { label: string; parent?: string }> = {
   '/admin/health': { label: 'Giám sát hệ thống', parent: 'Quản trị' },
 }
 
-function useBreadcrumb(pathname: string) {
+function useBreadcrumb(pathname: string, navigate: (path: string) => void) {
   const config = BREADCRUMB_MAP[pathname]
   if (!config) return [{ title: 'Trang' }]
 
   const items: any[] = [
-    { href: '/dashboard', title: <HomeOutlined /> },
+    {
+      title: (
+        <span onClick={() => navigate('/dashboard')} style={{ cursor: 'pointer' }}>
+          <HomeOutlined />
+        </span>
+      ),
+    },
   ]
   if (config.parent && config.parent !== 'Tổng quan') {
     items.push({ title: config.parent })
@@ -71,7 +77,7 @@ export default function AppHeader({
   const [globalSearchOpen, setGlobalSearchOpen] = useState(false)
   const [searchValue, setSearchValue] = useState('')
   const searchRef = useRef<HTMLInputElement>(null)
-  const breadcrumbItems = useBreadcrumb(location.pathname)
+  const breadcrumbItems = useBreadcrumb(location.pathname, navigate)
 
   const notificationQueryKey = ['notifications', user?.user_id]
   const unreadQueryKey = ['notifications-unread-count', user?.user_id]

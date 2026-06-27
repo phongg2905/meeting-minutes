@@ -1,12 +1,15 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { ActivityLogsService } from '../activity-logs/activity-logs.service';
 import { CreateBackupLogDto } from './dto/create-backup-log.dto';
 import { RestoreBackupDto } from './dto/restore-backup.dto';
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'crypto';
 
+const BACKUP_TIMEZONE = 'Asia/Ho_Chi_Minh';
+
 @Injectable()
 export class BackupLogsService {
+  private readonly logger = new Logger(BackupLogsService.name);
   private readonly backupVersion = 1;
   private readonly attachmentBucket = process.env.SUPABASE_STORAGE_BUCKET || 'meeting-attachments';
   private readonly backupBucket = process.env.BACKUP_STORAGE_BUCKET || 'system-backups';
@@ -23,6 +26,7 @@ export class BackupLogsService {
     const limit = Math.min(Math.max(Number(query.limit) || 10, 1), 100);
     const where: any = {};
     if (query.action_type) where.action_type = query.action_type;
+    if (query.type) where.type = query.type;
     if (query.search) {
       where.OR = [
         { file_name: { contains: query.search, mode: 'insensitive' } },
@@ -63,7 +67,9 @@ export class BackupLogsService {
     return created;
   }
 
-  async runBackup(userId: number) {
+  // ─── Shared business logic: gather data + upload ───
+  // Called by both manual (runBackup) and automatic (runAutomaticBackup)
+  async performBackup(userId: number): Promise<{ fileName: string; filePath: string; fileSize: number }> {
     this.assertBackupEncryptionReady();
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     const fileName = `backup-${timestamp}.json`;
@@ -126,25 +132,136 @@ export class BackupLogsService {
       },
     };
 
+    const serialized = JSON.stringify(this.encryptBackupPayload(payload), null, 2);
+    const buffer = Buffer.from(serialized, 'utf-8');
+    const fileSize = buffer.length;
+
     await this.uploadBackupObject(
       filePath,
-      Buffer.from(JSON.stringify(this.encryptBackupPayload(payload), null, 2), 'utf-8'),
+      buffer,
       'application/json',
     );
 
-    const log = await this.prisma.backupLog.create({
+    return { fileName, filePath, fileSize };
+  }
+
+  // ─── Manual backup ───
+  async runBackup(userId: number) {
+    const startedAt = new Date();
+
+    // Create PENDING log entry
+    const logEntry = await this.prisma.backupLog.create({
       data: {
         performed_by: userId,
         action_type: 'backup',
-        file_name: fileName,
-        file_path: filePath,
+        type: 'MANUAL',
+        status: 'PENDING',
+        started_at: startedAt,
       },
     });
-    await this.activityLogs.log(userId, 'BACKUP', 'backup_logs', log.backup_id, `Tao backup: ${fileName}`);
-    await this.cleanupExpiredBackups();
-    return log;
+
+    try {
+      // Update to RUNNING
+      await this.prisma.backupLog.update({
+        where: { backup_id: logEntry.backup_id },
+        data: { status: 'RUNNING' },
+      });
+
+      // Execute shared backup logic
+      const { fileName, filePath, fileSize } = await this.performBackup(userId);
+
+      const completedAt = new Date();
+
+      // Update to SUCCESS
+      const updated = await this.prisma.backupLog.update({
+        where: { backup_id: logEntry.backup_id },
+        data: {
+          status: 'SUCCESS',
+          file_name: fileName,
+          file_path: filePath,
+          file_size: fileSize,
+          completed_at: completedAt,
+        },
+      });
+
+      await this.activityLogs.log(userId, 'BACKUP', 'backup_logs', logEntry.backup_id, `Tao backup: ${fileName}`);
+      await this.cleanupExpiredBackups();
+      return updated;
+    } catch (error: any) {
+      const errorMessage = error.message || 'Unknown error';
+      this.logger.error(`❌ Backup thất bại: ${errorMessage}`, error.stack);
+
+      // Save FAILED status — never swallow errors
+      await this.prisma.backupLog.update({
+        where: { backup_id: logEntry.backup_id },
+        data: {
+          status: 'FAILED',
+          error_message: errorMessage,
+          completed_at: new Date(),
+        },
+      });
+
+      throw error;
+    }
   }
 
+  // ─── Automatic backup (shared by scheduler) ───
+  async runAutomaticBackup(adminId: number): Promise<{ backupId: number; fileName: string; status: string }> {
+    const startedAt = new Date();
+
+    const logEntry = await this.prisma.backupLog.create({
+      data: {
+        performed_by: adminId,
+        action_type: 'backup',
+        type: 'AUTOMATIC',
+        status: 'PENDING',
+        started_at: startedAt,
+        triggered_by: 'SYSTEM',
+      },
+    });
+
+    try {
+      await this.prisma.backupLog.update({
+        where: { backup_id: logEntry.backup_id },
+        data: { status: 'RUNNING' },
+      });
+
+      const { fileName, filePath, fileSize } = await this.performBackup(adminId);
+
+      const completedAt = new Date();
+      await this.prisma.backupLog.update({
+        where: { backup_id: logEntry.backup_id },
+        data: {
+          status: 'SUCCESS',
+          file_name: fileName,
+          file_path: filePath,
+          file_size: fileSize,
+          completed_at: completedAt,
+        },
+      });
+
+      await this.activityLogs.log(adminId, 'BACKUP', 'backup_logs', logEntry.backup_id, `Backup tu dong: ${fileName}`);
+      await this.cleanupExpiredBackups();
+
+      return { backupId: logEntry.backup_id, fileName, status: 'SUCCESS' };
+    } catch (error: any) {
+      const errorMessage = error.message || 'Unknown error';
+      this.logger.error(`❌ Backup tự động thất bại: ${errorMessage}`, error.stack);
+
+      await this.prisma.backupLog.update({
+        where: { backup_id: logEntry.backup_id },
+        data: {
+          status: 'FAILED',
+          error_message: errorMessage,
+          completed_at: new Date(),
+        },
+      });
+
+      throw error;
+    }
+  }
+
+  // ─── Restore ───
   async restore(userId: number, dto: RestoreBackupDto) {
     if (dto.confirmation !== 'RESTORE') {
       throw new BadRequestException('Vui long nhap RESTORE de xac nhan khoi phuc du lieu');
@@ -290,6 +407,9 @@ export class BackupLogsService {
           action_type: 'restore',
           file_name: backup.file_name,
           file_path: backup.file_path,
+          status: 'SUCCESS',
+          started_at: new Date(),
+          completed_at: new Date(),
         },
       });
       await this.activityLogs.log(
@@ -306,6 +426,7 @@ export class BackupLogsService {
         action_type: 'restore',
         file_name: backup.file_name,
         file_path: backup.file_path,
+        status: 'SUCCESS',
         created_at: new Date(),
       };
     }
@@ -313,43 +434,82 @@ export class BackupLogsService {
     return restoreLog;
   }
 
+  // ─── Status API ───
   async getStatus() {
-    const [allBackups, totalBackups] = await Promise.all([
+    const [allSuccessBackups, totalBackups] = await Promise.all([
       this.prisma.backupLog.findMany({
-        where: { action_type: 'backup' },
+        where: { action_type: 'backup', status: 'SUCCESS' },
         orderBy: { created_at: 'desc' },
         take: 100,
-        select: { created_at: true, file_name: true, performed_by: true },
+        select: { created_at: true, file_name: true, performed_by: true, type: true, status: true, file_size: true },
       }),
       this.prisma.backupLog.count({ where: { action_type: 'backup' } }),
     ]);
 
-    // Auto backups run at 2 AM server time — detect by hour (1:30–2:59 window)
-    const lastAutoBackup = allBackups.find((b) => {
-      const h = b.created_at.getHours();
-      const m = b.created_at.getMinutes();
-      return (h === 1 && m >= 30) || h === 2;
-    });
-    const lastManualBackup = allBackups.find((b) => b !== lastAutoBackup);
+    // Separate by type (use the explicit `type` field)
+    const lastAutomaticBackup = allSuccessBackups.find((b) => b.type === 'AUTOMATIC');
+    const lastManualBackup = allSuccessBackups.find((b) => b.type === 'MANUAL');
 
-    const now = new Date();
-    const nextBackup = new Date(now);
-    nextBackup.setHours(2, 0, 0, 0);
-    if (nextBackup <= now) {
-      nextBackup.setDate(nextBackup.getDate() + 1);
-    }
+    // Calculate next backup in Asia/Ho_Chi_Minh timezone
+    const nextAutomaticBackup = this.getNextBackupTimeInTimezone();
 
     return {
-      lastBackupAt: allBackups[0]?.created_at || null,
-      lastBackupFileName: allBackups[0]?.file_name || null,
-      lastAutoBackupAt: lastAutoBackup?.created_at || null,
-      lastAutoBackupFileName: lastAutoBackup?.file_name || null,
+      lastBackupAt: allSuccessBackups[0]?.created_at || null,
+      lastBackupFileName: allSuccessBackups[0]?.file_name || null,
+      lastAutoBackupAt: lastAutomaticBackup?.created_at || null,
+      lastAutoBackupFileName: lastAutomaticBackup?.file_name || null,
       lastManualBackupAt: lastManualBackup?.created_at || null,
       lastManualBackupFileName: lastManualBackup?.file_name || null,
-      nextBackupAt: nextBackup.toISOString(),
+      nextBackupAt: nextAutomaticBackup,
       totalBackups,
       retentionDays: this.backupRetentionDays,
     };
+  }
+
+  // ─── Check if today already has a successful automatic backup (for catch-up logic) ───
+  async hasTodayAutomaticBackup(): Promise<boolean> {
+    const ICT_OFFSET_MS = 7 * 60 * 60 * 1000;
+    const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+    const nowIctMs = Date.now() + ICT_OFFSET_MS;
+    const todayStartIctMs = Math.floor(nowIctMs / MS_PER_DAY) * MS_PER_DAY;
+    const todayEndIctMs = todayStartIctMs + MS_PER_DAY - 1;
+
+    const count = await this.prisma.backupLog.count({
+      where: {
+        type: 'AUTOMATIC',
+        status: 'SUCCESS',
+        started_at: {
+          gte: new Date(todayStartIctMs - ICT_OFFSET_MS),
+          lte: new Date(todayEndIctMs - ICT_OFFSET_MS),
+        },
+      },
+    });
+
+    return count > 0;
+  }
+
+  // ─── Compute next 02:00 Asia/Ho_Chi_Minh ───
+  getNextBackupTimeInTimezone(): string {
+    const ICT_OFFSET_MS = 7 * 60 * 60 * 1000;
+    const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+    const nowMs = Date.now();
+    // Current time in ICT
+    const nowIctMs = nowMs + ICT_OFFSET_MS;
+    // Start of today in ICT (00:00:00.000 ICT)
+    const todayStartIctMs = Math.floor(nowIctMs / MS_PER_DAY) * MS_PER_DAY;
+    // Today at 02:00 ICT
+    const today2amIctMs = todayStartIctMs + 2 * 60 * 60 * 1000;
+    // Convert back to UTC
+    const today2amUtcMs = today2amIctMs - ICT_OFFSET_MS;
+
+    if (nowMs >= today2amUtcMs) {
+      // Already past 02:00 ICT → next is tomorrow
+      return new Date(today2amUtcMs + MS_PER_DAY).toISOString();
+    }
+
+    return new Date(today2amUtcMs).toISOString();
   }
 
   async remove(userId: number, backupId: number) {

@@ -104,6 +104,7 @@ export const activityLogsService = {
 export const notificationsService = {
   getAll: (limit = 20) => api.get('/notifications', { params: { limit } }).then(r => r.data),
   unreadCount: () => api.get('/notifications/unread-count').then(r => r.data),
+  sidebarSummary: () => api.get('/notifications/sidebar-summary').then(r => r.data),
   markAsRead: (id: number) => api.patch(`/notifications/${id}/read`).then(r => r.data),
   markAllAsRead: () => api.patch('/notifications/read-all').then(r => r.data),
 }

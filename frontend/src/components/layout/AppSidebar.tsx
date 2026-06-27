@@ -1,8 +1,11 @@
 import { useMemo, useState, useCallback } from 'react'
 import type { ReactNode } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Avatar, Tooltip } from 'antd'
+import { keepPreviousDataPlaceholder, queryKeys } from '../../utils/queryKeys'
+import { notificationsService } from '../../services'
+import SidebarBadge from '../common/SidebarBadge'
 import {
   DashboardOutlined,
   FileTextOutlined,
@@ -104,6 +107,54 @@ export default function AppSidebar({ collapsed, onToggle, mobileOpen, onMobileCl
   const { user } = useAuthStore()
   // Khởi tạo state từ pathname hiện tại để tự động mở nhóm tương ứng
   // khi người dùng tải trực tiếp một route con
+  // ─── Sidebar summary ───
+  const { data: summary, isError: summaryError } = useQuery({
+    queryKey: queryKeys.notifications.sidebarSummary(),
+    queryFn: notificationsService.sidebarSummary,
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+    refetchOnWindowFocus: true,
+    placeholderData: keepPreviousDataPlaceholder,
+    retry: 2,
+  })
+
+  // Compute badge counts — silent fail = no badges
+  const summaryAvailable = !summaryError && !!summary
+  const badgeCounts = useMemo(() => {
+    if (!summaryAvailable) return {}
+
+    const meetingsBadge = (summary.meetings?.unread ?? 0) + (summary.meetings?.pending ?? 0)
+    const supportBadge = (summary.support?.unread ?? 0) + (summary.support?.pending ?? 0)
+
+    const adminChildren: Record<string, number | { dot: boolean }> = {}
+    let adminTotal = 0
+    if (summary.admin) {
+      if (summary.admin.managerRequests > 0) {
+        adminChildren['admin-approvals'] = summary.admin.managerRequests
+        adminTotal += summary.admin.managerRequests
+      }
+      if (summary.admin.systemAlerts > 0) {
+        // Giám sát: hiển thị số lỗi (severity error), không double-count
+        adminChildren['admin-monitoring'] = summary.admin.systemAlerts
+        adminTotal += summary.admin.systemAlerts
+        // Nhật ký: hiển thị chấm đỏ nếu có lỗi (không cộng vào tổng)
+        adminChildren['admin-logs'] = { dot: true }
+      }
+      if (summary.admin.backupErrors > 0) {
+        adminChildren['admin-backup'] = summary.admin.backupErrors
+        adminTotal += summary.admin.backupErrors
+      }
+    }
+
+    return {
+      'meetings-group': meetingsBadge > 0 ? meetingsBadge : undefined,
+      'meetings-list': meetingsBadge > 0 ? meetingsBadge : undefined,
+      'support': supportBadge > 0 ? supportBadge : undefined,
+      'admin-group': adminTotal > 0 ? adminTotal : undefined,
+      ...adminChildren,
+    }
+  }, [summary, summaryAvailable])
+
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>(() => {
     const path = location.pathname
     return {
@@ -319,9 +370,22 @@ export default function AppSidebar({ collapsed, onToggle, mobileOpen, onMobileCl
               whiteSpace: 'nowrap',
               fontSize: 13,
               fontWeight: isActive || isChildActive ? 700 : 600,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
             }}
           >
-            {item.label}
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {item.label}
+            </span>
+            {badgeCounts[item.id] != null && (
+              <SidebarBadge
+                count={typeof badgeCounts[item.id] === 'object' ? (badgeCounts[item.id] as any).dot ? undefined : (badgeCounts[item.id] as any).count : badgeCounts[item.id] as number | undefined}
+                dot={typeof badgeCounts[item.id] === 'object' ? (badgeCounts[item.id] as any).dot : false}
+                severity={item.id === 'admin-monitoring' || item.id === 'admin-logs' ? 'error' : item.id === 'admin-backup' || item.id === 'admin-approvals' ? 'warning' : 'info'}
+                label={`${item.label}: ${typeof badgeCounts[item.id] === 'object' ? 'có cảnh báo' : badgeCounts[item.id] + ' thông báo'}`}
+              />
+            )}
           </span>
         )}
         {!collapsed && item.children && (

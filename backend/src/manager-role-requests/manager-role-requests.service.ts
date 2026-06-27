@@ -48,10 +48,7 @@ export class ManagerRoleRequestsService {
     return this.prisma.managerRoleRequest.findMany({
       where,
       include: this.getInclude(),
-      orderBy: [
-        { updated_at: 'desc' },
-        { created_at: 'desc' },
-      ],
+      orderBy: { created_at: 'desc' },
     });
   }
 

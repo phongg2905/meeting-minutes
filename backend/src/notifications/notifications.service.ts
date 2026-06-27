@@ -1,5 +1,6 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { isSystemAdmin } from '../auth/roles.constants';
 
 type NotificationInput = {
   title: string;
@@ -83,5 +84,113 @@ export class NotificationsService {
       })),
       skipDuplicates: true,
     });
+  }
+
+  /**
+   * Sidebar summary — aggregated counts for notification badges.
+   * Trả về số liệu khác nhau theo vai trò.
+   */
+  async sidebarSummary(userId: number, roleId: number) {
+    const isAdmin = isSystemAdmin(roleId);
+
+    // Meetings: số thông báo chưa đọc liên quan đến meeting_minutes
+    const meetingsUnread = await this.prisma.notification.count({
+      where: {
+        user_id: userId,
+        is_read: false,
+        target_table: 'meeting_minutes',
+      },
+    });
+
+    // Support tickets
+    let supportUnread = 0;
+    let supportPending = 0;
+
+    if (isAdmin) {
+      // Admin: số ticket chưa xử lý (PENDING + PROCESSING)
+      supportPending = await this.prisma.supportTicket.count({
+        where: { status: { in: ['PENDING', 'PROCESSING'] } },
+      });
+      // Admin: số thông báo chưa đọc liên quan support
+      supportUnread = await this.prisma.notification.count({
+        where: {
+          user_id: userId,
+          is_read: false,
+          target_table: 'support_requests',
+        },
+      });
+    } else {
+      // User: ticket của mình đang chờ xử lý (không phải COMPLETED)
+      supportPending = await this.prisma.supportTicket.count({
+        where: {
+          requested_by: userId,
+          status: { not: 'COMPLETED' },
+        },
+      });
+      supportUnread = await this.prisma.notification.count({
+        where: {
+          user_id: userId,
+          is_read: false,
+          target_table: 'support_requests',
+        },
+      });
+    }
+
+    // Admin-only: manager role requests pending, backup errors, system warnings
+    let managerRequestsPending = 0;
+    let backupErrorCount = 0;
+    let systemAlertCount = 0;
+
+    if (isAdmin) {
+      managerRequestsPending = await this.prisma.managerRoleRequest.count({
+        where: { status: 'pending' },
+      });
+
+      // Backup errors: backup logs with 'backup' action_type — không có trường error riêng,
+      // dùng count hoặc check lần backup gần nhất
+      const latestBackup = await this.prisma.backupLog.findFirst({
+        where: { action_type: 'backup' },
+        orderBy: { created_at: 'desc' },
+      });
+      if (latestBackup) {
+        const hoursSinceLastBackup = (Date.now() - latestBackup.created_at.getTime()) / 3600000;
+        // Cảnh báo nếu quá 26 giờ không có backup mới
+        if (hoursSinceLastBackup > 26) {
+          backupErrorCount = 1;
+        }
+      } else {
+        backupErrorCount = 1; // Chưa từng backup
+      }
+
+      // System alerts: activity logs có lỗi trong 24h
+      const oneDayAgo = new Date(Date.now() - 24 * 3600000);
+      systemAlertCount = await this.prisma.activityLog.count({
+        where: {
+          action_name: { contains: 'ERROR', mode: 'insensitive' },
+          created_at: { gte: oneDayAgo },
+        },
+      });
+    }
+
+    return {
+      meetings: {
+        unread: meetingsUnread,
+        pending: 0, // Không có khái niệm pending cho biên bản trong hệ thống hiện tại
+      },
+      support: {
+        unread: supportUnread,
+        pending: supportPending,
+      },
+      admin: isAdmin
+        ? {
+            managerRequests: managerRequestsPending,
+            activityWarnings: 0,
+            backupErrors: backupErrorCount,
+            systemAlerts: systemAlertCount,
+          }
+        : undefined,
+      totalUnread: meetingsUnread + supportUnread,
+      updatedAt: new Date().toISOString(),
+    };
   }
 }
