@@ -14,6 +14,13 @@ const ACTION_COLORS: Record<string, string> = {
   DELETE: 'error',
   STATUS_CHANGE: 'warning',
   LOGIN: 'blue',
+  LOGOUT: 'default',
+  REGISTER: 'cyan',
+  PASSWORD_RESET: 'orange',
+  PASSWORD_CHANGE: 'orange',
+  EMAIL_VERIFIED: 'purple',
+  REGISTER_OTP_RESENT: 'purple',
+  SEED: 'geekblue',
 }
 
 export default function ActivityLogsPage() {
@@ -41,14 +48,19 @@ export default function ActivityLogsPage() {
     {
       title: 'Người thực hiện',
       key: 'user',
+      width: 220,
       render: (_: any, record: any) => (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <Avatar size={30} style={{ background: '#1a56a0', fontSize: 12, flexShrink: 0 }}>
             {record.user?.full_name?.[0]?.toUpperCase()}
           </Avatar>
-          <div>
-            <Text strong style={{ fontSize: 13 }}>{record.user?.full_name}</Text>
-            <div style={{ fontSize: 11, color: '#94a3b8' }}>{record.user?.email}</div>
+          <div style={{ minWidth: 0 }}>
+            <Text strong style={{ fontSize: 13 }} ellipsis={{ tooltip: record.user?.full_name }}>
+              {record.user?.full_name}
+            </Text>
+            <div style={{ fontSize: 11, color: '#94a3b8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {record.user?.email}
+            </div>
           </div>
         </div>
       ),
@@ -57,32 +69,51 @@ export default function ActivityLogsPage() {
       title: 'Hành động',
       dataIndex: 'action_name',
       key: 'action_name',
-      width: 130,
+      width: 160,
       render: (a: string) => (
-        <Tag color={ACTION_COLORS[a] || 'default'} style={{ fontWeight: 600 }}>{a}</Tag>
+        <Tag
+          color={ACTION_COLORS[a] || 'default'}
+          style={{
+            fontWeight: 600,
+            maxWidth: '100%',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+            display: 'inline-block',
+            verticalAlign: 'middle',
+          }}
+        >
+          {a}
+        </Tag>
       ),
     },
     {
-      title: 'Bảng dữ liệu',
+      title: 'Bảng',
       dataIndex: 'target_table',
       key: 'target_table',
       width: 160,
-      render: (t: string) => t ? <Tag>{t}</Tag> : '—',
+      render: (t: string) => t ? (
+        <Tag style={{ maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t}</Tag>
+      ) : '—',
     },
     {
       title: 'Chi tiết',
       dataIndex: 'action_detail',
       key: 'action_detail',
-      ellipsis: true,
-      render: (d: string) => d || '—',
+      ellipsis: { showTitle: false },
+      render: (d: string) => d ? (
+        <Text ellipsis={{ tooltip: d }} style={{ fontSize: 13 }}>
+          {d}
+        </Text>
+      ) : '—',
     },
     {
       title: 'Thời gian',
       dataIndex: 'created_at',
       key: 'created_at',
-      width: 160,
+      width: 150,
       render: (d: string) => (
-        <Text style={{ fontSize: 12 }}>{formatDateTime(d)}</Text>
+        <Text style={{ fontSize: 12, whiteSpace: 'nowrap' }}>{formatDateTime(d)}</Text>
       ),
     },
   ]
@@ -152,7 +183,7 @@ export default function ActivityLogsPage() {
           columns={columns}
           rowKey="log_id"
           loading={isLoading}
-          scroll={{ x: 700 }}
+          scroll={{ x: 900 }}
           pagination={{
             current: page,
             pageSize: 20,

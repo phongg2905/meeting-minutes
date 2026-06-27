@@ -18,6 +18,9 @@ export default function LoginPage() {
   const [registerOpen, setRegisterOpen] = useState(false)
   const [forgotOpen, setForgotOpen] = useState(false)
   const [resetStep, setResetStep] = useState(false)
+  const [otpStep, setOtpStep] = useState(false)
+  const [otpEmail, setOtpEmail] = useState('')
+  const [otpValue, setOtpValue] = useState('')
 
   const loginMutation = useMutation({
     mutationFn: ({ email, password }: { email: string; password: string }) =>
@@ -34,18 +37,38 @@ export default function LoginPage() {
       const { confirm, ...payload } = values
       return authService.register(payload)
     },
-    onSuccess: () => {
-      message.success('Đăng ký thành công. Bạn có thể đăng nhập ngay.')
-      setRegisterOpen(false)
-      registerForm.resetFields()
+    onSuccess: (data) => {
+      setOtpEmail(data.email)
+      setOtpStep(true)
+      message.success('Mã xác nhận đã được gửi đến email của bạn!')
     },
     onError: (err: any) => message.error(err?.response?.data?.message || 'Không thể đăng ký'),
+  })
+
+  const verifyOtpMutation = useMutation({
+    mutationFn: ({ email, code }: { email: string; code: string }) =>
+      authService.verifyRegistrationOtp(email, code),
+    onSuccess: () => {
+      message.success('Xác thực email thành công! Bạn có thể đăng nhập ngay.')
+      setRegisterOpen(false)
+      setOtpStep(false)
+      setOtpEmail('')
+      setOtpValue('')
+      registerForm.resetFields()
+    },
+    onError: (err: any) => message.error(err?.response?.data?.message || 'Mã xác nhận không hợp lệ'),
+  })
+
+  const resendOtpMutation = useMutation({
+    mutationFn: (email: string) => authService.resendRegistrationOtp(email),
+    onSuccess: () => message.success('Mã xác nhận mới đã được gửi đến email của bạn!'),
+    onError: (err: any) => message.error(err?.response?.data?.message || 'Không thể gửi lại mã'),
   })
 
   const forgotMutation = useMutation({
     mutationFn: (email: string) => authService.forgotPassword(email),
     onSuccess: () => {
-      message.success('Nếu email hợp lệ, mã xác nhận đã được gửi đến hộp thư.')
+      message.success('Mã xác nhận đã được gửi đến hộp thư.')
       setResetStep(true)
     },
     onError: (err: any) => message.error(err?.response?.data?.message || 'Không thể gửi mã xác nhận'),
@@ -116,7 +139,7 @@ export default function LoginPage() {
             )}
 
             <Form form={form} layout="vertical" onFinish={(values) => loginMutation.mutate(values)} size="large">
-              <Form.Item name="email" label="Email" rules={[{ required: true, message: 'Vui lòng nhập email' }, { type: 'email', message: 'Email không hợp lệ' }]} style={{ marginBottom: 20 }}>
+              <Form.Item name="email" label="Email" rules={[{ required: true, message: 'Vui lòng nhập email' }]} style={{ marginBottom: 20 }}>
                 <Input prefix={<UserOutlined style={{ color: '#94a3b8' }} />} placeholder="Nhập địa chỉ email" style={{ borderRadius: 14, height: 52 }} />
               </Form.Item>
               <Form.Item name="password" label="Mật khẩu" rules={[{ required: true, message: 'Vui lòng nhập mật khẩu' }]} style={{ marginBottom: 14 }}>
@@ -136,36 +159,75 @@ export default function LoginPage() {
         </div>
       </div>
 
-      <Modal title="Tạo tài khoản moi" open={registerOpen} onCancel={() => setRegisterOpen(false)} footer={null}>
-        <Form form={registerForm} layout="vertical" onFinish={(values) => registerMutation.mutate(values)}>
-          <Form.Item name="full_name" label="Họ và tên" rules={[{ required: true, message: 'Nhập họ tên' }]}>
-            <Input prefix={<UserOutlined />} />
-          </Form.Item>
-          <Form.Item name="email" label="Email" rules={[{ required: true, type: 'email', message: 'Email không hợp lệ' }]}>
-            <Input prefix={<MailOutlined />} />
-          </Form.Item>
-          <Form.Item name="phone" label="Số điện thoại" rules={[{ required: true, pattern: /^\d{10,11}$/, message: 'Số điện thoại không hợp lệ' }]}>
-            <Input />
-          </Form.Item>
-          <Form.Item name="password" label="Mật khẩu" rules={[{ required: true, min: 6, message: 'Mật khẩu it nhat 6 ky tu' }]}>
-            <Input.Password prefix={<LockOutlined />} />
-          </Form.Item>
-          <Form.Item name="confirm" label="Nhập lại mật khẩu" dependencies={['password']} rules={[
-            { required: true, message: 'Nhập lại mật khẩu' },
-            ({ getFieldValue }) => ({
-              validator(_, value) {
-                if (!value || getFieldValue('password') === value) return Promise.resolve()
-                return Promise.reject(new Error('Mật khẩu nhap lai khong khop'))
-              },
-            }),
-          ]}>
-            <Input.Password prefix={<LockOutlined />} />
-          </Form.Item>
-          <Button type="primary" htmlType="submit" block loading={registerMutation.isPending}>Đăng ký</Button>
-        </Form>
+      <Modal title={otpStep ? 'Xác thực email' : 'Tạo tài khoản mới'} open={registerOpen} onCancel={() => { setRegisterOpen(false); setOtpStep(false); setOtpEmail(''); setOtpValue('') }} footer={null}>
+        {!otpStep ? (
+          <Form form={registerForm} layout="vertical" onFinish={(values) => registerMutation.mutate(values)}>
+            <Form.Item name="full_name" label="Họ và tên" rules={[{ required: true, message: 'Nhập họ tên' }]}>
+              <Input prefix={<UserOutlined />} />
+            </Form.Item>
+            <Form.Item name="email" label="Email" rules={[{ required: true, type: 'email', message: 'Email không hợp lệ' }]}>
+              <Input prefix={<MailOutlined />} />
+            </Form.Item>
+            <Form.Item name="phone" label="Số điện thoại" rules={[{ required: true, pattern: /^\d{10,11}$/, message: 'Số điện thoại không hợp lệ' }]}>
+              <Input />
+            </Form.Item>
+            <Form.Item name="password" label="Mật khẩu" rules={[{ required: true, min: 6, message: 'Mật khẩu ít nhất 6 ký tự' }]}>
+              <Input.Password prefix={<LockOutlined />} />
+            </Form.Item>
+            <Form.Item name="confirm" label="Nhập lại mật khẩu" dependencies={['password']} rules={[
+              { required: true, message: 'Nhập lại mật khẩu' },
+              ({ getFieldValue }) => ({
+                validator(_, value) {
+                  if (!value || getFieldValue('password') === value) return Promise.resolve()
+                  return Promise.reject(new Error('Mật khẩu nhập lại không khớp'))
+                },
+              }),
+            ]}>
+              <Input.Password prefix={<LockOutlined />} />
+            </Form.Item>
+            <Button type="primary" htmlType="submit" block loading={registerMutation.isPending}>Đăng ký</Button>
+          </Form>
+        ) : (
+          <div style={{ textAlign: 'center', padding: '8px 0' }}>
+            <Typography.Text style={{ display: 'block', marginBottom: 24, color: '#64748b', fontSize: 15 }}>
+              Mã xác nhận đã được gửi đến <strong>{otpEmail}</strong>
+            </Typography.Text>
+            <Input.OTP
+              length={6}
+              size="large"
+              style={{ marginBottom: 24 }}
+              value={otpValue}
+              onChange={(value) => {
+                setOtpValue(value)
+                if (value.length === 6) {
+                  verifyOtpMutation.mutate({ email: otpEmail, code: value })
+                }
+              }}
+            />
+            <Button
+              type="primary"
+              block
+              loading={verifyOtpMutation.isPending}
+              disabled={otpValue.length !== 6}
+              onClick={() => verifyOtpMutation.mutate({ email: otpEmail, code: otpValue })}
+              style={{ height: 52, borderRadius: 14, fontSize: 16, fontWeight: 700 }}
+            >
+              Xác thực
+            </Button>
+            <div style={{ marginTop: 16 }}>
+              <Button
+                type="link"
+                loading={resendOtpMutation.isPending}
+                onClick={() => resendOtpMutation.mutate(otpEmail)}
+              >
+                Gửi lại mã xác nhận
+              </Button>
+            </div>
+          </div>
+        )}
       </Modal>
 
-      <Modal title="Quen mat khau" open={forgotOpen} onCancel={() => setForgotOpen(false)} footer={null}>
+      <Modal title="Quên mật khẩu" open={forgotOpen} onCancel={() => setForgotOpen(false)} footer={null}>
         <Form form={forgotForm} layout="vertical" onFinish={(values) => {
           if (!resetStep) forgotMutation.mutate(values.email)
           else resetMutation.mutate(values)
@@ -178,7 +240,7 @@ export default function LoginPage() {
               <Form.Item name="code" label="Mã xác nhận" rules={[{ required: true, message: 'Nhập mã xác nhận' }]}>
                 <Input maxLength={6} />
               </Form.Item>
-              <Form.Item name="newPassword" label="Mật khẩu moi" rules={[{ required: true, min: 6, message: 'Mật khẩu it nhat 6 ky tu' }]}>
+              <Form.Item name="newPassword" label="Mật khẩu mới" rules={[{ required: true, min: 6, message: 'Mật khẩu ít nhất 6 ký tự' }]}>
                 <Input.Password prefix={<LockOutlined />} />
               </Form.Item>
             </>

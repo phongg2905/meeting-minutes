@@ -2,8 +2,12 @@ import api, { publicApi } from './api'
 
 export const authService = {
   login: (email: string, password: string) =>
-    api.post('/auth/login', { email, password }).then(r => r.data),
-  register: (data: any) => api.post('/auth/register', data).then(r => r.data),
+    publicApi.post('/auth/login', { email, password }).then(r => r.data),
+  register: (data: any) => publicApi.post('/auth/register', data).then(r => r.data),
+  verifyRegistrationOtp: (email: string, code: string) =>
+    publicApi.post('/auth/verify-registration-otp', { email, code }).then(r => r.data),
+  resendRegistrationOtp: (email: string) =>
+    publicApi.post('/auth/resend-registration-otp', { email }).then(r => r.data),
   forgotPassword: (email: string) =>
     api.post('/auth/forgot-password', { email }).then(r => r.data),
   resetPassword: (data: any) => api.post('/auth/reset-password', data).then(r => r.data),
@@ -106,6 +110,7 @@ export const notificationsService = {
 
 export const backupLogsService = {
   getAll: (params?: any) => api.get('/backup-logs', { params }).then(r => r.data),
+  getStatus: () => api.get('/backup-logs/status').then(r => r.data),
   create: (data: any) => api.post('/backup-logs', data).then(r => r.data),
   run: () => api.post('/backup-logs/run').then(r => r.data),
   restore: (backup_id: number, confirmation = 'RESTORE') =>
@@ -117,6 +122,24 @@ export const supportRequestsService = {
   getAll: (params?: any) => api.get('/support-requests', { params }).then(r => r.data),
   create: (data: any) => api.post('/support-requests', data).then(r => r.data),
   update: (id: number, data: any) => api.patch(`/support-requests/${id}`, data).then(r => r.data),
+}
+
+export const supportTicketsService = {
+  getAll: (params?: any) => api.get('/support-tickets', { params }).then(r => r.data),
+  getOne: (id: number) => api.get(`/support-tickets/${id}`).then(r => r.data),
+  create: (data: any) => api.post('/support-tickets', data).then(r => r.data),
+  addMessage: (id: number, data: any, files?: File[]) => {
+    const formData = new FormData()
+    if (data.content) formData.append('content', data.content)
+    if (files?.length) files.forEach(f => formData.append('files', f))
+    return api.post(`/support-tickets/${id}/messages`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }).then(r => r.data)
+  },
+  requestMoreInfo: (id: number, data: any) =>
+    api.patch(`/support-tickets/${id}/request-info`, data).then(r => r.data),
+  complete: (id: number, data: any) =>
+    api.patch(`/support-tickets/${id}/complete`, data).then(r => r.data),
 }
 
 export const healthService = {

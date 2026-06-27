@@ -18,6 +18,7 @@ const PublicMeetingsListPage = lazy(() => import('./pages/public/PublicMeetingsL
 const PublicMeetingDetailPage = lazy(() => import('./pages/public/PublicMeetingDetailPage'))
 const PublicMeetingPrintPage = lazy(() => import('./pages/public/PublicMeetingPrintPage'))
 const SupportRequestsPage = lazy(() => import('./pages/support/SupportRequestsPage'))
+const SupportTicketsPage = lazy(() => import('./pages/support/SupportTicketsPage'))
 const SystemHealthPage = lazy(() => import('./pages/admin/SystemHealthPage'))
 const ManagerRoleRequestPage = lazy(() => import('./pages/manager/ManagerRoleRequestPage'))
 const ManagerRoleRequestsPage = lazy(() => import('./pages/admin/ManagerRoleRequestsPage'))
@@ -56,7 +57,7 @@ export default function App() {
           <Route path="meetings/:id" element={<MeetingDetailPage />} />
           <Route path="meetings/:id/edit" element={<MeetingEditPage />} />
           <Route path="profile" element={<ProfilePage />} />
-          <Route path="support" element={<SupportRequestsPage />} />
+          <Route path="support" element={<SupportTicketsPage />} />
           <Route path="manager-request" element={<ManagerRoleRequestPage />} />
           <Route path="admin/users" element={<AdminRoute><UsersPage /></AdminRoute>} />
           <Route path="admin/manager-requests" element={<AdminRoute><ManagerRoleRequestsPage /></AdminRoute>} />

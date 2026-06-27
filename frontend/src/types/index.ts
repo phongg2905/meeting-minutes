@@ -123,6 +123,52 @@ export interface SupportRequest {
   handler?: { user_id: number; full_name: string; email: string }
 }
 
+export interface SupportTicket {
+  ticket_id: number
+  requested_by?: number
+  title: string
+  content: string
+  category?: string
+  status: 'PENDING' | 'PROCESSING' | 'WAITING_FOR_USER' | 'COMPLETED'
+  response?: string
+  resolution?: string
+  assigned_admin?: number
+  handled_by?: number
+  resolved_by?: number
+  resolved_at?: string
+  last_message_at?: string
+  created_at: string
+  updated_at?: string
+  requester?: { user_id: number; full_name: string; email: string }
+  handler?: { user_id: number; full_name: string; email: string }
+  assignee?: { user_id: number; full_name: string; email: string }
+  resolver?: { user_id: number; full_name: string; email: string }
+  messages?: SupportMessage[]
+  _count?: { messages: number }
+}
+
+export interface SupportMessage {
+  message_id: number
+  ticket_id: number
+  sender_id: number
+  sender_type: 'USER' | 'ADMIN'
+  content: string
+  created_at: string
+  sender?: { user_id: number; full_name: string; email: string }
+  attachments?: SupportAttachment[]
+}
+
+export interface SupportAttachment {
+  attachment_id: number
+  message_id: number
+  file_name: string
+  file_path: string
+  file_type?: string
+  file_size?: number
+  uploaded_by?: number
+  created_at: string
+}
+
 export interface ManagerRoleRequest {
   request_id: number
   user_id: number
