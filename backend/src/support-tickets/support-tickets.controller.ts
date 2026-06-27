@@ -1,0 +1,83 @@
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  ParseIntPipe,
+  Patch,
+  Post,
+  Query,
+  Request,
+  UploadedFile,
+  UploadedFiles,
+  UseGuards,
+  UseInterceptors,
+} from '@nestjs/common';
+import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
+import { ApiBearerAuth, ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { SupportTicketsService } from './support-tickets.service';
+import { CreateTicketDto } from './dto/create-ticket.dto';
+import { AddMessageDto } from './dto/add-message.dto';
+import { RequestInfoDto } from './dto/request-info.dto';
+import { CompleteTicketDto } from './dto/complete-ticket.dto';
+import { QueryTicketDto } from './dto/query-ticket.dto';
+
+@ApiTags('Support Tickets')
+@ApiBearerAuth()
+@UseGuards(JwtAuthGuard)
+@Controller('support-tickets')
+export class SupportTicketsController {
+  constructor(private service: SupportTicketsService) {}
+
+  @Get()
+  @ApiOperation({ summary: 'Danh sách ticket — User: ticket của mình, Admin: tất cả' })
+  findAll(@Request() req, @Query() query: QueryTicketDto) {
+    return this.service.findAll(req.user.user_id, req.user.role_id, query);
+  }
+
+  @Get(':id')
+  @ApiOperation({ summary: 'Chi tiết ticket kèm messages và attachments' })
+  findOne(@Param('id', ParseIntPipe) id: number, @Request() req) {
+    return this.service.findOne(id, req.user.user_id, req.user.role_id);
+  }
+
+  @Post()
+  @ApiOperation({ summary: 'Tạo ticket mới (User)' })
+  create(@Request() req, @Body() dto: CreateTicketDto) {
+    return this.service.create(req.user.user_id, dto);
+  }
+
+  @Post(':id/messages')
+  @ApiOperation({ summary: 'Gửi message vào ticket (User: WAITING_FOR_USER, Admin: PROCESSING)' })
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(FilesInterceptor('files', 10))
+  addMessage(
+    @Param('id', ParseIntPipe) id: number,
+    @Request() req,
+    @Body() dto: AddMessageDto,
+    @UploadedFiles() files?: Express.Multer.File[],
+  ) {
+    return this.service.addMessage(id, req.user.user_id, req.user.role_id, dto, files);
+  }
+
+  @Patch(':id/request-info')
+  @ApiOperation({ summary: '[Admin] Yêu cầu bổ sung thông tin → WAITING_FOR_USER' })
+  requestMoreInfo(
+    @Param('id', ParseIntPipe) id: number,
+    @Request() req,
+    @Body() dto: RequestInfoDto,
+  ) {
+    return this.service.requestMoreInfo(id, req.user.user_id, req.user.role_id, dto);
+  }
+
+  @Patch(':id/complete')
+  @ApiOperation({ summary: '[Admin] Hoàn thành ticket → COMPLETED' })
+  complete(
+    @Param('id', ParseIntPipe) id: number,
+    @Request() req,
+    @Body() dto: CompleteTicketDto,
+  ) {
+    return this.service.complete(id, req.user.user_id, req.user.role_id, dto);
+  }
+}

@@ -1,4 +1,4 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { ActivityLogsService } from '../activity-logs/activity-logs.service';
 import { CreateSupportRequestDto } from './dto/create-support-request.dto';
@@ -32,12 +32,20 @@ export class SupportRequestsService {
     }
     if (query.date_from || query.date_to) {
       where.created_at = {};
-      if (query.date_from) where.created_at.gte = new Date(query.date_from);
-      if (query.date_to) where.created_at.lte = new Date(`${query.date_to}T23:59:59.999Z`);
+      if (query.date_from) {
+        const d = new Date(query.date_from);
+        if (isNaN(d.getTime())) throw new BadRequestException('Ngày bắt đầu không hợp lệ');
+        where.created_at.gte = d;
+      }
+      if (query.date_to) {
+        const d = new Date(`${query.date_to}T23:59:59.999Z`);
+        if (isNaN(d.getTime())) throw new BadRequestException('Ngày kết thúc không hợp lệ');
+        where.created_at.lte = d;
+      }
     }
 
     const [data, total] = await Promise.all([
-      this.prisma.supportRequest.findMany({
+      this.prisma.supportTicket.findMany({
         where,
         include: {
           requester: { select: { user_id: true, full_name: true, email: true } },
@@ -47,14 +55,14 @@ export class SupportRequestsService {
         skip: (page - 1) * limit,
         take: limit,
       }),
-      this.prisma.supportRequest.count({ where }),
+      this.prisma.supportTicket.count({ where }),
     ]);
     return { data, total, page, limit };
   }
 
   async findOne(id: number, userId: number, roleId: number) {
-    const request = await this.prisma.supportRequest.findUnique({
-      where: { request_id: id },
+    const request = await this.prisma.supportTicket.findUnique({
+      where: { ticket_id: id },
       include: {
         requester: { select: { user_id: true, full_name: true, email: true } },
         handler: { select: { user_id: true, full_name: true, email: true } },
@@ -68,20 +76,20 @@ export class SupportRequestsService {
   }
 
   async create(userId: number, dto: CreateSupportRequestDto) {
-    const request = await this.prisma.supportRequest.create({
+    const request = await this.prisma.supportTicket.create({
       data: {
         requested_by: userId,
         title: dto.title,
         content: dto.content,
       },
     });
-    await this.activityLogs.log(userId, 'CREATE', 'support_requests', request.request_id, `Tạo yêu cầu hỗ trợ: ${request.title}`);
+    await this.activityLogs.log(userId, 'CREATE', 'support_requests', request.ticket_id, `Tạo yêu cầu hỗ trợ: ${request.title}`);
     await this.notifications.createForRoles([ROLE_ADMIN], {
       title: 'Yêu cầu hỗ trợ mới',
       message: request.title,
       type: 'support',
       target_table: 'support_requests',
-      target_id: request.request_id,
+      target_id: request.ticket_id,
     }, [userId]);
     return request;
   }
@@ -91,8 +99,8 @@ export class SupportRequestsService {
       throw new ForbiddenException('Chỉ quản trị viên mới được xử lý yêu cầu hỗ trợ');
     }
     await this.findOne(id, actorId, roleId);
-    const request = await this.prisma.supportRequest.update({
-      where: { request_id: id },
+    const request = await this.prisma.supportTicket.update({
+      where: { ticket_id: id },
       data: {
         status: dto.status,
         response: dto.response,
@@ -105,7 +113,7 @@ export class SupportRequestsService {
       message: request.title,
       type: 'support',
       target_table: 'support_requests',
-      target_id: request.request_id,
+      target_id: request.ticket_id,
     });
     return request;
   }
