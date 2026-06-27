@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { handleUnauthorizedResponse } from './api'
+import { handleUnauthorizedResponse, setNavigateFn } from './api'
 import { resetAuthState, useAuthStore } from '../store/authStore'
 
 describe('auth reset on unauthorized response', () => {
@@ -10,6 +10,7 @@ describe('auth reset on unauthorized response', () => {
 
   it('clears token, persisted auth storage, and zustand state', () => {
     const redirectSpy = vi.fn()
+    setNavigateFn(redirectSpy)
 
     useAuthStore.getState().login('expired-token', {
       user_id: 1,
@@ -24,7 +25,7 @@ describe('auth reset on unauthorized response', () => {
     expect(useAuthStore.getState().isAuthenticated).toBe(true)
     expect(localStorage.getItem('token')).toBe('expired-token')
 
-    handleUnauthorizedResponse(redirectSpy)
+    handleUnauthorizedResponse()
 
     expect(useAuthStore.getState().isAuthenticated).toBe(false)
     expect(useAuthStore.getState().token).toBeNull()

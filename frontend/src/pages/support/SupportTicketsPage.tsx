@@ -1,15 +1,18 @@
 import { useState } from 'react'
-import { Button, Card, DatePicker, Form, Input, message, Modal, Select, Space, Table, Tag, Typography, Upload, Divider, Empty, Spin } from 'antd'
-import { PlusOutlined, SearchOutlined, SendOutlined, CheckCircleOutlined, InfoCircleOutlined, UploadOutlined, PaperClipOutlined, UserOutlined, CrownOutlined, ClockCircleOutlined } from '@ant-design/icons'
+import { Button, Card, DatePicker, Form, Input, message, Modal, Select, Space, Table, Tag, Typography, Upload, Divider, Empty, Grid, Pagination, Skeleton } from 'antd'
+import { PlusOutlined, SearchOutlined, SendOutlined, CheckCircleOutlined, InfoCircleOutlined, UploadOutlined, PaperClipOutlined, UserOutlined, CrownOutlined, ClockCircleOutlined, MessageOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { keepPreviousDataPlaceholder } from '../../utils/queryKeys'
 import { supportTicketsService } from '../../services'
 import { useAuthStore } from '../../store/authStore'
 import { formatDateTime, isAdmin } from '../../utils'
+import { TableRefreshIndicator, TableSkeleton } from '../../components/common'
 import { SupportTicket, SupportMessage } from '../../types'
 
 const { Text, Title, Paragraph } = Typography
 const { TextArea } = Input
 const { RangePicker } = DatePicker
+const { useBreakpoint } = Grid
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; icon: React.ReactNode }> = {
   PENDING: { label: 'Chờ xử lý', color: 'gold', icon: <ClockCircleOutlined /> },
@@ -45,8 +48,10 @@ export default function SupportTicketsPage() {
   const [createForm] = Form.useForm()
 
   const admin = isAdmin(user?.role_id)
+  const screens = useBreakpoint()
+  const isMobile = !screens.md
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isFetching } = useQuery({
     queryKey: ['support-tickets', { page, search, statusFilter, categoryFilter, dateRange }],
     queryFn: () => supportTicketsService.getAll({
       page,
@@ -57,12 +62,15 @@ export default function SupportTicketsPage() {
       date_from: dateRange?.[0]?.format('YYYY-MM-DD'),
       date_to: dateRange?.[1]?.format('YYYY-MM-DD'),
     }),
+    placeholderData: keepPreviousDataPlaceholder,
   })
+  const hasExistingData = (data?.data?.length ?? 0) > 0
 
   const { data: ticketDetail, refetch: refetchDetail } = useQuery({
     queryKey: ['support-ticket-detail', selectedTicket?.ticket_id],
     queryFn: () => supportTicketsService.getOne(selectedTicket!.ticket_id),
     enabled: !!selectedTicket,
+    placeholderData: keepPreviousDataPlaceholder,
   })
 
   const createMutation = useMutation({
@@ -153,63 +161,80 @@ export default function SupportTicketsPage() {
     {
       title: 'Yêu cầu',
       key: 'title',
+      width: 420,
       render: (_: any, record: SupportTicket) => (
-        <div>
-          <Text strong style={{ cursor: 'pointer' }} onClick={() => openDetail(record)}>
+        <div style={{ minWidth: 0, width: '100%' }}>
+          <div
+            style={{ cursor: 'pointer', fontWeight: 700, color: 'var(--color-text)', marginBottom: 6, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', lineHeight: 1.45 }}
+            onClick={() => openDetail(record)}
+            title={record.title}
+          >
             {record.title}
-          </Text>
-          <div style={{ color: '#64748b', fontSize: 12, marginTop: 2 }}>
-            {record.content?.length > 100 ? record.content.slice(0, 100) + '...' : record.content}
+          </div>
+          <div
+            style={{ color: 'var(--color-text-secondary)', fontSize: 13, lineHeight: 1.5, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}
+            title={record.content}
+          >
+            {record.content}
           </div>
           {record.category && (
-            <Tag style={{ marginTop: 4, fontSize: 11 }}>{record.category}</Tag>
+            <div style={{ marginTop: 8 }}>
+              <Tag style={{ borderRadius: 999, fontSize: 11, padding: '2px 8px' }}>{record.category}</Tag>
+            </div>
           )}
         </div>
       ),
     },
-    ...(admin ? [{
-      title: 'Người gửi',
-      key: 'requester',
-      width: 160,
-      render: (_: any, record: SupportTicket) => (
-        <div>
-          <div>{record.requester?.full_name || 'Không rõ'}</div>
-          <Text type="secondary" style={{ fontSize: 11 }}>{record.requester?.email}</Text>
-        </div>
-      ),
-    }] : []),
     {
       title: 'Trạng thái',
       dataIndex: 'status',
       key: 'status',
-      width: 140,
+      width: 150,
       render: (status: string) => {
         const cfg = STATUS_CONFIG[status] || { label: status, color: 'default', icon: null }
-        return <Tag icon={cfg.icon} color={cfg.color}>{cfg.label}</Tag>
+        return (
+          <div style={{ display: 'flex', alignItems: 'center' }}>
+            <Tag icon={cfg.icon} color={cfg.color} style={{ whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: 110 }}>
+              {cfg.label}
+            </Tag>
+          </div>
+        )
       },
     },
     {
       title: 'Tin nhắn',
       key: 'messages',
-      width: 80,
+      width: 100,
       align: 'center' as const,
-      render: (_: any, record: SupportTicket) => record._count?.messages || 0,
+      render: (_: any, record: SupportTicket) => (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+          <MessageOutlined style={{ color: 'var(--color-text-tertiary)', fontSize: 14 }} />
+          <span style={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{record._count?.messages || 0}</span>
+        </div>
+      ),
     },
     {
       title: 'Ngày tạo',
       dataIndex: 'created_at',
       key: 'created_at',
-      width: 170,
-      render: (value: string) => formatDateTime(value),
+      width: 200,
+      render: (value: string) => (
+        <div style={{ whiteSpace: 'nowrap', color: 'var(--color-text-secondary)', fontSize: 13 }}>
+          {formatDateTime(value)}
+        </div>
+      ),
     },
     {
       title: 'Thao tác',
       key: 'actions',
-      width: 100,
+      width: 120,
+      align: 'center' as const,
       render: (_: any, record: SupportTicket) => (
-        <Button size="small" type="primary" ghost onClick={() => openDetail(record)}>
-          Chi tiết
-        </Button>
+        <div style={{ display: 'flex', justifyContent: 'center' }}>
+          <Button size="small" type="primary" ghost onClick={() => openDetail(record)} style={{ minWidth: 84, height: 38, borderRadius: 10 }}>
+            Chi tiết
+          </Button>
+        </div>
       ),
     },
   ]
@@ -262,6 +287,32 @@ export default function SupportTicketsPage() {
       )
     })
   }
+
+  const renderTableSkeleton = () => (
+    <div style={{ padding: 8 }}>
+      {Array.from({ length: 5 }).map((_, index) => (
+        <div key={index} style={{ display: 'flex', gap: 12, padding: '12px 8px', borderBottom: index === 4 ? undefined : '1px solid var(--color-border-light)' }}>
+          <div style={{ flex: '0 0 42%', minWidth: 0 }}>
+            <Skeleton.Input active size="small" style={{ width: '85%', height: 16, marginBottom: 8 }} />
+            <Skeleton.Input active size="small" style={{ width: '70%', height: 12, marginBottom: 8 }} />
+            <Skeleton.Button active size="small" style={{ width: 56, height: 24, borderRadius: 999 }} />
+          </div>
+          <div style={{ flex: '0 0 15%' }}>
+            <Skeleton.Button active size="small" style={{ width: 92, height: 28, borderRadius: 999 }} />
+          </div>
+          <div style={{ flex: '0 0 10%', display: 'flex', justifyContent: 'center' }}>
+            <Skeleton.Input active size="small" style={{ width: 24, height: 16 }} />
+          </div>
+          <div style={{ flex: '0 0 20%' }}>
+            <Skeleton.Input active size="small" style={{ width: '90%', height: 14 }} />
+          </div>
+          <div style={{ flex: '0 0 13%', display: 'flex', justifyContent: 'center' }}>
+            <Skeleton.Button active size="small" style={{ width: 78, height: 36, borderRadius: 10 }} />
+          </div>
+        </div>
+      ))}
+    </div>
+  )
 
   const renderDetailFooter = () => {
     if (!selectedTicket || !ticketDetail) return null
@@ -418,22 +469,79 @@ export default function SupportTicketsPage() {
           />
         </div>
       </Card>
-
-      <Card>
-        <Table
-          dataSource={data?.data || []}
-          columns={columns}
-          rowKey="ticket_id"
-          loading={isLoading}
-          pagination={{
-            current: page,
-            pageSize: 10,
-            total: data?.total || 0,
-            showTotal: (t) => `Tổng ${t} yêu cầu`,
-            onChange: setPage,
-            showSizeChanger: false,
-          }}
-        />
+      <Card style={{ borderRadius: 18, overflow: 'hidden' }} bodyStyle={{ padding: 0 }}>
+        {isLoading && !hasExistingData ? (
+          renderTableSkeleton()
+        ) : isMobile ? (
+          <div style={{ padding: 16 }}>
+            <TableRefreshIndicator visible={isFetching && hasExistingData} />
+            {(!data?.data || data.data.length === 0) ? (
+              <Empty description="Chưa có yêu cầu hỗ trợ" style={{ padding: '24px 0' }} />
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {(data?.data || []).map((record) => (
+                  <Card key={record.ticket_id} size="small" style={{ borderRadius: 14, border: '1px solid var(--color-border-light)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'flex-start' }}>
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <div style={{ fontWeight: 700, color: 'var(--color-text)', marginBottom: 6 }} title={record.title}>{record.title}</div>
+                        <div style={{ fontSize: 13, color: 'var(--color-text-secondary)', lineHeight: 1.5 }} title={record.content}>{record.content}</div>
+                        {record.category && (
+                          <div style={{ marginTop: 8 }}>
+                            <Tag style={{ borderRadius: 999, fontSize: 11, padding: '2px 8px' }}>{record.category}</Tag>
+                          </div>
+                        )}
+                      </div>
+                      <div style={{ flexShrink: 0 }}>
+                        {(() => {
+                          const cfg = STATUS_CONFIG[record.status] || { label: record.status, color: 'default', icon: null }
+                          return <Tag icon={cfg.icon} color={cfg.color}>{cfg.label}</Tag>
+                        })()}
+                      </div>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 12, marginTop: 12 }}>
+                      <div>
+                        <div style={{ fontSize: 12, color: 'var(--color-text-tertiary)' }}>Tin nhắn</div>
+                        <div style={{ fontWeight: 700, marginTop: 2 }}>{record._count?.messages || 0}</div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 12, color: 'var(--color-text-tertiary)' }}>Ngày tạo</div>
+                        <div style={{ fontWeight: 700, marginTop: 2 }}>{formatDateTime(record.created_at)}</div>
+                      </div>
+                    </div>
+                    <Button type="primary" ghost onClick={() => openDetail(record)} style={{ width: '100%', marginTop: 12, height: 40, borderRadius: 10 }}>
+                      Chi tiết
+                    </Button>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : (
+          <>
+            <TableRefreshIndicator visible={isFetching && hasExistingData} />
+            <Table
+              dataSource={data?.data || []}
+              columns={columns}
+              rowKey="ticket_id"
+              tableLayout="fixed"
+              pagination={false}
+              locale={{ emptyText: <Empty description="Chưa có yêu cầu hỗ trợ" /> }}
+              style={{ width: '100%' }}
+            />
+            <div style={{ display: 'flex', flexDirection: screens.sm ? 'row' : 'column', justifyContent: 'space-between', alignItems: screens.sm ? 'center' : 'flex-start', gap: 12, padding: '16px 20px', borderTop: '1px solid var(--color-border-light)' }}>
+              <Text type="secondary" style={{ fontSize: 13 }}>Tổng {data?.total || 0} yêu cầu</Text>
+              <Pagination
+                current={page}
+                pageSize={10}
+                total={data?.total || 0}
+                onChange={setPage}
+                showSizeChanger={false}
+                showLessItems
+                size="small"
+              />
+            </div>
+          </>
+        )}
       </Card>
 
       {/* Modal tạo ticket */}
@@ -521,7 +629,9 @@ export default function SupportTicketsPage() {
             {renderDetailFooter()}
           </>
         ) : (
-          <Spin />
+          <div style={{ padding: '40px 0' }}>
+            <TableSkeleton rows={3} columns={[{ width: '100%' }]} />
+          </div>
         )}
       </Modal>
 

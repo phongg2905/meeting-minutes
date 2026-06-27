@@ -19,6 +19,7 @@ import {
 import { DeleteOutlined, FileTextOutlined, PlusOutlined } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
 import dayjs from 'dayjs'
+import { keepPreviousDataPlaceholder } from '../../utils/queryKeys'
 import { minuteTypesService } from '../../services'
 import { MeetingMinute, MinuteType } from '../../types'
 import {
@@ -74,6 +75,7 @@ export default function MeetingForm({ initialValues, onSubmit, loading, mode = '
   const { data: types } = useQuery({
     queryKey: ['minute-types'],
     queryFn: minuteTypesService.getAll,
+    staleTime: 5 * 60 * 1000,
   })
 
   const selectedTypeName = useMemo(() => {

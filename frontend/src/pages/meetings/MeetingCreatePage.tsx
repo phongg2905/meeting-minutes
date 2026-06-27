@@ -4,6 +4,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import MeetingForm from '../../components/meeting/MeetingForm'
 import { meetingMinutesService } from '../../services'
+import { PageHeader } from '../../components/common'
 
 export default function MeetingCreatePage() {
   const navigate = useNavigate()
@@ -26,28 +27,16 @@ export default function MeetingCreatePage() {
       <Breadcrumb
         style={{ marginBottom: 16 }}
         items={[
-          { href: '/dashboard', title: <HomeOutlined /> },
+          { href: '/dashboard', title: <HomeOutlined style={{ color: 'var(--color-text-secondary)' }} /> },
           { href: '/meetings', title: 'Biên bản họp' },
           { title: 'Tạo mới' },
         ]}
       />
-      <div className="page-header">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div style={{
-            width: 44, height: 44, borderRadius: 12,
-            background: '#eff6ff', display: 'flex',
-            alignItems: 'center', justifyContent: 'center', fontSize: 22,
-          }}>
-            <FileAddOutlined style={{ color: '#1a56a0' }} />
-          </div>
-          <div>
-            <h1 className="page-title" style={{ marginBottom: 0 }}>Tạo biên bản mới</h1>
-            <p style={{ margin: 0, color: '#64748b', fontSize: 13 }}>
-              Điền đầy đủ thông tin để tạo biên bản họp lớp
-            </p>
-          </div>
-        </div>
-      </div>
+      <PageHeader
+        title="Tạo biên bản mới"
+        subtitle="Điền đầy đủ thông tin để tạo biên bản họp lớp"
+        icon={<FileAddOutlined />}
+      />
 
       <MeetingForm
         mode="create"

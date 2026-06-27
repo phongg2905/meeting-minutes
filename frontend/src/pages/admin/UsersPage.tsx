@@ -8,6 +8,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { usersService, rolesService } from '../../services'
 import { formatDateTime } from '../../utils'
 import { User, Role } from '../../types'
+import { TableRefreshIndicator, TableSkeleton } from '../../components/common'
 
 const { Text } = Typography
 
@@ -21,7 +22,7 @@ export default function UsersPage() {
   const [statusFilter, setStatusFilter] = useState<string>()
   const [form] = Form.useForm()
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isFetching } = useQuery({
     queryKey: ['users', { page, search, roleFilter, statusFilter }],
     queryFn: () => usersService.getAll({
       page,
@@ -31,6 +32,7 @@ export default function UsersPage() {
       status: statusFilter,
     }),
   })
+  const hasExistingData = (data?.data?.length ?? 0) > 0
 
   const { data: roles } = useQuery({
     queryKey: ['roles'],
@@ -221,21 +223,27 @@ export default function UsersPage() {
       </Card>
 
       <Card style={{ boxShadow: '0 1px 6px rgba(0,0,0,0.05)' }}>
-        <Table
-          dataSource={data?.data || []}
-          columns={columns}
-          rowKey="user_id"
-          loading={isLoading}
-          scroll={{ x: 700 }}
-          pagination={{
-            current: page,
-            pageSize: 10,
-            total: data?.total || 0,
-            showTotal: (t) => `Tổng ${t} người dùng`,
-            onChange: setPage,
-            showSizeChanger: false,
-          }}
-        />
+        {isLoading && !hasExistingData ? (
+          <TableSkeleton rows={5} columns={[{ width: 280 }, { width: 100 }, { width: 100 }, { width: 100 }, { width: 160 }, { width: 120 }]} />
+        ) : (
+          <>
+            <TableRefreshIndicator visible={isFetching && hasExistingData} />
+            <Table
+              dataSource={data?.data || []}
+              columns={columns}
+              rowKey="user_id"
+              scroll={{ x: 700 }}
+              pagination={{
+                current: page,
+                pageSize: 10,
+                total: data?.total || 0,
+                showTotal: (t) => `Tổng ${t} người dùng`,
+                onChange: setPage,
+                showSizeChanger: false,
+              }}
+            />
+          </>
+        )}
       </Card>
 
       {/* Create/Edit Modal */}
