@@ -626,6 +626,7 @@ export default function SupportTicketsPage() {
         onCancel={() => { setDetailModalOpen(false); setSelectedTicket(null); setReplyContent(''); setReplyFiles([]) }}
         footer={null}
         width={700}
+        zIndex={1000}
         destroyOnClose
       >
         {ticketDetail ? (
@@ -682,6 +683,7 @@ export default function SupportTicketsPage() {
         onOk={handleRequestInfo}
         okText="Gửi yêu cầu"
         confirmLoading={requestInfoMutation.isPending}
+        zIndex={1100}
       >
         <TextArea
           rows={4}
@@ -709,6 +711,7 @@ export default function SupportTicketsPage() {
         confirmLoading={completeMutation.isPending}
         closable={!completeMutation.isPending}
         maskClosable={!completeMutation.isPending}
+        zIndex={1200}
       >
         <TextArea
           rows={4}
