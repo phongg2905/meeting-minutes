@@ -37,6 +37,7 @@ export const minuteTypesService = {
 
 export const meetingMinutesService = {
   getAll: (params?: any) => api.get('/meeting-minutes', { params }).then(r => r.data),
+  getDashboard: () => api.get('/meeting-minutes/dashboard').then(r => r.data),
   getOne: (id: number) => api.get(`/meeting-minutes/${id}`).then(r => r.data),
   create: (data: any) => api.post('/meeting-minutes', data).then(r => r.data),
   update: (id: number, data: any) => api.patch(`/meeting-minutes/${id}`, data).then(r => r.data),
@@ -119,12 +120,6 @@ export const backupLogsService = {
   remove: (backup_id: number) => api.delete(`/backup-logs/${backup_id}`).then(r => r.data),
 }
 
-export const supportRequestsService = {
-  getAll: (params?: any) => api.get('/support-requests', { params }).then(r => r.data),
-  create: (data: any) => api.post('/support-requests', data).then(r => r.data),
-  update: (id: number, data: any) => api.patch(`/support-requests/${id}`, data).then(r => r.data),
-}
-
 export const supportTicketsService = {
   getAll: (params?: any) => api.get('/support-tickets', { params }).then(r => r.data),
   getOne: (id: number) => api.get(`/support-tickets/${id}`).then(r => r.data),
@@ -141,6 +136,17 @@ export const supportTicketsService = {
     api.patch(`/support-tickets/${id}/request-info`, data).then(r => r.data),
   complete: (id: number, data: any) =>
     api.patch(`/support-tickets/${id}/complete`, data).then(r => r.data),
+  downloadAttachment: async (id: number, fileName: string) => {
+    const response = await api.get(`/support-tickets/attachments/${id}/download`, { responseType: 'blob' })
+    const url = window.URL.createObjectURL(new Blob([response.data]))
+    const link = document.createElement('a')
+    link.href = url
+    link.setAttribute('download', fileName)
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    window.URL.revokeObjectURL(url)
+  },
 }
 
 export const healthService = {

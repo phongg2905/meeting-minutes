@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { keepPreviousDataPlaceholder } from '../../utils/queryKeys'
 import { backupLogsService } from '../../services'
 import { Button, Card, Col, DatePicker, Input, Popconfirm, Row, Select, Space, Table, Tag, Tooltip, Typography, message } from 'antd'
 import { DatabaseOutlined, ClockCircleOutlined, CalendarOutlined, DeleteOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons'
@@ -27,7 +26,6 @@ export default function BackupLogsPage() {
       date_from: dateRange?.[0]?.format('YYYY-MM-DD'),
       date_to: dateRange?.[1]?.format('YYYY-MM-DD'),
     }),
-    placeholderData: keepPreviousDataPlaceholder,
   })
   const hasExistingData = (data?.data?.length ?? 0) > 0
 

@@ -6,6 +6,7 @@ import { UpdateUserDto } from './dto/update-user.dto';
 import { ActivityLogsService } from '../activity-logs/activity-logs.service';
 import { normalizeEmail, sanitizeUser } from './user-response.util';
 import { USER_STATUS_ACTIVE, USER_STATUSES } from './user.constants';
+import { ROLE_ADMIN } from '../auth/roles.constants';
 
 @Injectable()
 export class UsersService {
@@ -99,9 +100,16 @@ export class UsersService {
   }
 
   async update(id: number, dto: UpdateUserDto, actorId: number) {
-    await this.findOne(id);
+    const existing = await this.findOne(id);
     if (dto.role_id !== undefined) await this.assertValidRoleId(dto.role_id);
     this.assertValidStatus(dto.status);
+
+    // Chặn hạ quyền hoặc khóa Admin duy nhất
+    const isDowngrade = dto.role_id !== undefined && dto.role_id !== existing.role_id;
+    const isLocking = dto.status !== undefined && dto.status !== USER_STATUS_ACTIVE && existing.status === USER_STATUS_ACTIVE;
+    if (existing.role_id === ROLE_ADMIN && (isDowngrade || isLocking)) {
+      await this.assertNotLastAdmin(id);
+    }
 
     const user = await this.prisma.user.update({
       where: { user_id: id },
@@ -142,6 +150,10 @@ export class UsersService {
 
   async remove(id: number, actorId: number) {
     const user = await this.findOne(id);
+    // Chặn xóa Admin duy nhất của hệ thống
+    if (user.role_id === ROLE_ADMIN) {
+      await this.assertNotLastAdmin(id);
+    }
     const deleted = await this.prisma.user.delete({ where: { user_id: id } });
     await this.activityLogs.log(actorId, 'DELETE', 'users', id, `Xóa người dùng: ${user.email}`);
     return sanitizeUser(deleted);
@@ -150,12 +162,31 @@ export class UsersService {
   async updateStatus(id: number, status: string, actorId: number) {
     this.assertValidStatus(status);
     const user = await this.findOne(id);
+    // Chặn khóa Admin duy nhất
+    if (user.role_id === ROLE_ADMIN && status !== USER_STATUS_ACTIVE && user.status === USER_STATUS_ACTIVE) {
+      await this.assertNotLastAdmin(id);
+    }
     const updated = await this.prisma.user.update({
       where: { user_id: id },
       data: { status },
     });
-    await this.activityLogs.log(actorId, 'STATUS_CHANGE', 'users', id, `Doi trang thai nguoi dung ${user.email} -> ${status}`);
+    await this.activityLogs.log(actorId, 'STATUS_CHANGE', 'users', id, `Thay đổi trạng thái người dùng ${user.email} -> ${status}`);
     return sanitizeUser(updated);
+  }
+
+  private async assertNotLastAdmin(excludeUserId: number) {
+    const activeAdminCount = await this.prisma.user.count({
+      where: {
+        role_id: ROLE_ADMIN,
+        status: USER_STATUS_ACTIVE,
+        user_id: { not: excludeUserId },
+      },
+    });
+    if (activeAdminCount === 0) {
+      throw new BadRequestException(
+        'Không thể thực hiện thao tác này vì đây là Admin hoạt động duy nhất của hệ thống',
+      );
+    }
   }
 
   private async assertValidRoleId(roleId: number) {

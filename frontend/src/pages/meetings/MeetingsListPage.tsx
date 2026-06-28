@@ -1,8 +1,7 @@
 import { useState } from 'react'
-import { Table, Button, Tag, Input, Select, Space, Popconfirm, message, Card, Row, Col, Typography, Tooltip, DatePicker, Collapse, Badge, Grid } from 'antd'
+import { Table, Button, Tag, Input, Select, Space, Popconfirm, message, Card, Row, Col, Typography, Tooltip, DatePicker, Collapse, Badge, Grid, Modal } from 'antd'
 import { PlusOutlined, SearchOutlined, EditOutlined, DeleteOutlined, EyeOutlined, FilterOutlined, ReloadOutlined } from '@ant-design/icons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { keepPreviousDataPlaceholder } from '../../utils/queryKeys'
 import { useNavigate } from 'react-router-dom'
 import { meetingMinutesService, minuteTypesService } from '../../services'
 import MeetingVisibilityToggle from '../../components/meeting/MeetingVisibilityToggle'
@@ -16,12 +15,17 @@ const { Text } = Typography
 const { RangePicker } = DatePicker
 const { useBreakpoint } = Grid
 
-export default function MeetingsListPage() {
+type MeetingsListPageProps = {
+  scope?: 'all' | 'mine'
+}
+
+export default function MeetingsListPage({ scope = 'all' }: MeetingsListPageProps) {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { user } = useAuthStore()
   const screens = useBreakpoint()
   const isMobile = !screens.md
+  const isMineScope = scope === 'mine'
 
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>()
@@ -49,7 +53,7 @@ export default function MeetingsListPage() {
   const [draftDateRange, setDraftDateRange] = useState<[Dayjs | null, Dayjs | null] | null>(null)
 
   const { data, isLoading, isFetching, isError, refetch } = useQuery({
-    queryKey: ['meeting-minutes', user?.user_id, { search, statusFilter, typeFilter, classFilter, hostFilter, secretaryFilter, meetingFormFilter, dateRange, page }],
+    queryKey: ['meeting-minutes', user?.user_id, scope, { search, statusFilter, typeFilter, classFilter, hostFilter, secretaryFilter, meetingFormFilter, dateRange, page }],
     queryFn: () => meetingMinutesService.getAll({
       search: search || undefined,
       status: statusFilter,
@@ -60,10 +64,10 @@ export default function MeetingsListPage() {
       meeting_form: meetingFormFilter,
       date_from: dateRange?.[0]?.format('YYYY-MM-DD'),
       date_to: dateRange?.[1]?.format('YYYY-MM-DD'),
+      mine: isMineScope ? 'true' : undefined,
       page,
       limit: 10,
     }),
-    placeholderData: keepPreviousDataPlaceholder,
   })
   const hasExistingData = (data?.data?.length ?? 0) > 0
 
@@ -93,6 +97,30 @@ export default function MeetingsListPage() {
       message.error(err?.response?.data?.message || 'Không thể cập nhật trạng thái')
     },
   })
+
+  const requestStatusChange = (record: MeetingMinute, nextStatus: string) => {
+    if (record.status === nextStatus) return
+
+    const statusLabel: Record<string, string> = {
+      draft: 'Đang chỉnh sửa',
+      completed: 'Hoàn tất',
+    }
+
+    const isOwnMinute = record.created_by === user?.user_id
+    if (!isOwnMinute) {
+      statusMutation.mutate({ id: record.minute_id, status: nextStatus })
+      return
+    }
+
+    Modal.confirm({
+      title: 'Xác nhận đổi trạng thái',
+      content: `Bạn có chắc muốn chuyển biên bản "${record.minute_code}" sang trạng thái "${statusLabel[nextStatus] || nextStatus}" không?`,
+      okText: 'Xác nhận',
+      cancelText: 'Hủy',
+      centered: true,
+      onOk: () => statusMutation.mutate({ id: record.minute_id, status: nextStatus }),
+    })
+  }
 
   const applyFilters = () => {
     setStatusFilter(draftStatus)
@@ -227,16 +255,16 @@ export default function MeetingsListPage() {
       render: (status: string, record: MeetingMinute) => (
         <div style={{ display: 'flex', alignItems: 'center' }}>
           {(isAdmin(user?.role_id) || (isMinuteManager(user?.role_id) && record.created_by === user?.user_id)) ? (
-            <Select
-              value={status}
-              size="small"
-              style={{ width: 130 }}
-              onChange={(value) => statusMutation.mutate({ id: record.minute_id, status: value })}
-              options={[
-                { value: 'draft', label: 'Đang chỉnh sửa' },
-                { value: 'completed', label: 'Hoàn tất' },
-              ]}
-              dropdownStyle={{ borderRadius: 10 }}
+              <Select
+                value={status}
+                size="small"
+                style={{ width: 130 }}
+              onChange={(value) => requestStatusChange(record, value)}
+                options={[
+                  { value: 'draft', label: 'Đang chỉnh sửa' },
+                  { value: 'completed', label: 'Hoàn tất' },
+                ]}
+                dropdownStyle={{ borderRadius: 10 }}
             />
           ) : (
             <Tag
@@ -422,7 +450,10 @@ export default function MeetingsListPage() {
           <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', color: 'var(--color-text-tertiary)', marginBottom: 4 }}>
             BIÊN BẢN HỌP
           </div>
-          <h1 className="page-title">Danh sách biên bản</h1>
+          <h1 className="page-title">{isMineScope ? 'Biên bản của tôi' : 'Danh sách biên bản'}</h1>
+          <div style={{ color: 'var(--color-text-secondary)', marginTop: 6, fontSize: 14 }}>
+            {isMineScope ? 'Các biên bản bạn đã tạo và có thể chỉnh sửa.' : 'Tổng hợp các biên bản bạn được phép xem.'}
+          </div>
         </div>
         {canWriteMinutes(user?.role_id) && (
           <Button

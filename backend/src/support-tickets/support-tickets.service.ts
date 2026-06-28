@@ -13,6 +13,8 @@ import { RequestInfoDto } from './dto/request-info.dto';
 import { CompleteTicketDto } from './dto/complete-ticket.dto';
 import { QueryTicketDto } from './dto/query-ticket.dto';
 import { ROLE_ADMIN, isSystemAdmin } from '../auth/roles.constants';
+import { extname } from 'path';
+import { randomUUID } from 'crypto';
 
 const TICKET_STATUS = {
   PENDING: 'PENDING',
@@ -28,11 +30,43 @@ const SENDER_TYPE = {
 
 @Injectable()
 export class SupportTicketsService {
+  private readonly storageBucket = process.env.SUPABASE_STORAGE_BUCKET || 'meeting-attachments';
+  private readonly maxFileSize = 10 * 1024 * 1024;
+  private readonly allowedMimeTypes = new Set([
+    'application/pdf',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.ms-excel',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'image/jpeg',
+    'image/png',
+    'text/plain',
+  ]);
+  private readonly allowedExtensionsByMime = new Map<string, string[]>([
+    ['application/pdf', ['.pdf']],
+    ['application/msword', ['.doc']],
+    ['application/vnd.openxmlformats-officedocument.wordprocessingml.document', ['.docx']],
+    ['application/vnd.ms-excel', ['.xls']],
+    ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', ['.xlsx']],
+    ['image/jpeg', ['.jpg', '.jpeg']],
+    ['image/png', ['.png']],
+    ['text/plain', ['.txt']],
+  ]);
+
   constructor(
     private prisma: PrismaService,
     private activityLogs: ActivityLogsService,
     private notifications: NotificationsService,
   ) {}
+
+  private parseDateBoundary(value: string, endOfDay = false) {
+    const suffix = endOfDay ? '23:59:59.999+07:00' : '00:00:00.000+07:00';
+    const date = new Date(`${value}T${suffix}`);
+    if (isNaN(date.getTime())) {
+      throw new BadRequestException(endOfDay ? 'Ngày kết thúc không hợp lệ' : 'Ngày bắt đầu không hợp lệ');
+    }
+    return date;
+  }
 
   /**
    * ─── USER: Tạo ticket mới ───
@@ -121,16 +155,10 @@ export class SupportTicketsService {
     if (query.date_from || query.date_to) {
       where.created_at = {};
       if (query.date_from) {
-        const d = new Date(query.date_from);
-        if (isNaN(d.getTime()))
-          throw new BadRequestException('Ngày bắt đầu không hợp lệ');
-        where.created_at.gte = d;
+        where.created_at.gte = this.parseDateBoundary(query.date_from);
       }
       if (query.date_to) {
-        const d = new Date(`${query.date_to}T23:59:59.999Z`);
-        if (isNaN(d.getTime()))
-          throw new BadRequestException('Ngày kết thúc không hợp lệ');
-        where.created_at.lte = d;
+        where.created_at.lte = this.parseDateBoundary(query.date_to, true);
       }
     }
 
@@ -243,75 +271,130 @@ export class SupportTicketsService {
       }
     }
 
-    // Tạo message
-    const message = await this.prisma.supportMessage.create({
-      data: {
-        ticket_id: id,
-        sender_id: userId,
-        sender_type: isAdmin ? SENDER_TYPE.ADMIN : SENDER_TYPE.USER,
-        content: dto.content,
-      },
-    });
-
-    // Upload files nếu có
+    // Validate files nếu có
     if (files?.length) {
-      const attachmentData = files.map((file) => ({
-        message_id: message.message_id,
-        file_name: file.originalname,
-        file_path: file.path || file.filename,
-        file_type: file.mimetype,
-        file_size: file.size,
-        uploaded_by: userId,
-      }));
-
-      await this.prisma.supportAttachment.createMany({ data: attachmentData });
-    }
-
-    // Cập nhật trạng thái ticket
-    const updateData: any = {
-      last_message_at: new Date(),
-    };
-
-    if (isAdmin) {
-      // Admin gửi message → luôn set handled_by + chuyển sang PROCESSING nếu đang PENDING
-      updateData.handled_by = userId;
-      if (ticket.status === TICKET_STATUS.PENDING) {
-        updateData.status = TICKET_STATUS.PROCESSING;
+      if (files.length > 5) {
+        throw new BadRequestException('Chỉ được tải lên tối đa 5 tệp đính kèm một lần');
       }
-    } else {
-      // User gửi message khi WAITING_FOR_USER → quay lại PROCESSING + notif Admin
-      updateData.status = TICKET_STATUS.PROCESSING;
-
-      await this.notifications.createForRoles(
-        [ROLE_ADMIN],
-        {
-          title: 'Người dùng đã bổ sung thông tin',
-          message: `Ticket "${ticket.title}" đã được cập nhật với thông tin bổ sung`,
-          type: 'SUPPORT_UPDATED',
-          target_table: 'support_requests',
-          target_id: id,
-        },
-      );
+      for (const file of files) {
+        this.validateFile(file);
+      }
     }
 
-    await this.prisma.supportTicket.update({
-      where: { ticket_id: id },
-      data: updateData,
-    });
+    const isFirstTimeProcessing = isAdmin && ticket.status === TICKET_STATUS.PENDING;
+    const uploadedPaths: string[] = [];
 
-    // Ghi log
-    await this.activityLogs.log(
-      userId,
-      'MESSAGE',
-      'support_requests',
-      id,
-      `Gửi tin nhắn trong ticket: ${ticket.title}`,
-    );
+    try {
+      const result = await this.prisma.$transaction(async (tx) => {
+        // Tạo message
+        const message = await tx.supportMessage.create({
+          data: {
+            ticket_id: id,
+            sender_id: userId,
+            sender_type: isAdmin ? SENDER_TYPE.ADMIN : SENDER_TYPE.USER,
+            content: dto.content,
+          },
+        });
 
-    return {
-      message,
-      ticket_status: updateData.status || ticket.status,
-    };
+        // Upload files nếu có
+        if (files?.length) {
+          const attachmentData = [];
+          for (const file of files) {
+            const extension = extname(file.originalname).toLowerCase();
+            const safeBaseName = file.originalname
+              .replace(extension, '')
+              .replace(/[^a-zA-Z0-9._-]/g, '_')
+              .slice(0, 80);
+            const safeName = `${Date.now()}-${randomUUID()}-${safeBaseName}${extension}`;
+            const storagePath = `support-attachments/${id}/${safeName}`;
+
+            await this.uploadToSupabase(storagePath, file.buffer, file.mimetype);
+            uploadedPaths.push(storagePath);
+
+            attachmentData.push({
+              message_id: message.message_id,
+              file_name: file.originalname,
+              file_path: storagePath,
+              file_type: file.mimetype,
+              file_size: file.size,
+              uploaded_by: userId,
+            });
+          }
+
+          await tx.supportAttachment.createMany({ data: attachmentData });
+        }
+
+        // Cập nhật trạng thái ticket
+        const updateData: any = {
+          last_message_at: new Date(),
+        };
+
+        if (isAdmin) {
+          updateData.handled_by = userId;
+          if (ticket.status === TICKET_STATUS.PENDING) {
+            updateData.status = TICKET_STATUS.PROCESSING;
+          }
+        } else {
+          updateData.status = TICKET_STATUS.PROCESSING;
+        }
+
+        const updatedTicket = await tx.supportTicket.update({
+          where: { ticket_id: id },
+          data: updateData,
+        });
+
+        return { message, ticketStatus: updatedTicket.status };
+      });
+
+      // Ghi log
+      await this.activityLogs.log(
+        userId,
+        'MESSAGE',
+        'support_requests',
+        id,
+        `Gửi tin nhắn trong ticket: ${ticket.title}`,
+      );
+
+      // Gửi Notifications ngoài transaction để tránh nghẽn
+      if (isAdmin) {
+        // Admin phản hồi -> Gửi notif cho User
+        if (ticket.requested_by) {
+          await this.notifications.createForUser(ticket.requested_by, {
+            title: isFirstTimeProcessing ? 'Yêu cầu hỗ trợ đã được tiếp nhận' : 'Có phản hồi mới từ Admin',
+            message: `Ticket "${ticket.title}": ${dto.content.slice(0, 100)}`,
+            type: isFirstTimeProcessing ? 'SUPPORT_PROCESSING' : 'SUPPORT_MESSAGE_NEW',
+            target_table: 'support_requests',
+            target_id: id,
+          });
+        }
+      } else {
+        // User phản hồi -> Gửi notif cho Admin
+        await this.notifications.createForRoles(
+          [ROLE_ADMIN],
+          {
+            title: 'Người dùng đã bổ sung thông tin',
+            message: `Ticket "${ticket.title}" đã được cập nhật với thông tin bổ sung`,
+            type: 'SUPPORT_UPDATED',
+            target_table: 'support_requests',
+            target_id: id,
+          },
+        );
+      }
+
+      return {
+        message: result.message,
+        ticket_status: result.ticketStatus,
+      };
+
+    } catch (error) {
+      // Rollback files đã upload lên Supabase nếu có lỗi xảy ra
+      for (const path of uploadedPaths) {
+        try {
+          await this.deleteAttachmentContent(path);
+        } catch {}
+      }
+      throw error;
+    }
   }
 
   /**
@@ -468,33 +551,149 @@ export class SupportTicketsService {
   /**
    * ─── Upload attachment cho message ───
    */
-  async uploadAttachment(
-    ticketId: number,
-    messageId: number,
-    userId: number,
-    roleId: number,
-    file: Express.Multer.File,
-  ) {
-    // Kiểm tra quyền truy cập ticket
-    await this.findOne(ticketId, userId, roleId);
-
-    const message = await this.prisma.supportMessage.findUnique({
-      where: { message_id: messageId },
-    });
-    if (!message || message.ticket_id !== ticketId) {
-      throw new NotFoundException('Không tìm thấy tin nhắn');
-    }
-
-    return this.prisma.supportAttachment.create({
-      data: {
-        message_id: messageId,
-        file_name: file.originalname,
-        file_path: file.path || file.filename,
-        file_type: file.mimetype,
-        file_size: file.size,
-        uploaded_by: userId,
+  async getDownloadAttachment(id: number, userId: number, roleId: number) {
+    const attachment = await this.prisma.supportAttachment.findUnique({
+      where: { attachment_id: id },
+      include: {
+        message: {
+          include: {
+            ticket: true,
+          },
+        },
       },
     });
+
+    if (!attachment) {
+      throw new NotFoundException('Không tìm thấy tệp đính kèm');
+    }
+
+    const ticket = attachment.message.ticket;
+    const isUserAuthorized =
+      isSystemAdmin(roleId) ||
+      ticket.requested_by === userId ||
+      ticket.handled_by === userId ||
+      ticket.assigned_admin === userId;
+
+    if (!isUserAuthorized) {
+      throw new ForbiddenException('Bạn không có quyền tải tệp đính kèm này');
+    }
+
+    await this.activityLogs.log(
+      userId,
+      'DOWNLOAD',
+      'support_attachments',
+      id,
+      `Tải xuống tệp đính kèm hỗ trợ: ${attachment.file_name}`,
+    );
+
+    const content = await this.readAttachmentContent(attachment.file_path);
+    return { attachment, content };
+  }
+
+  private async readAttachmentContent(path: string) {
+    const { url, serviceRoleKey } = this.getSupabaseConfig();
+    const response = await fetch(`${url}/storage/v1/object/${this.storageBucket}/${this.encodeStoragePath(path)}`, {
+      headers: {
+        apikey: serviceRoleKey,
+        Authorization: `Bearer ${serviceRoleKey}`,
+      },
+    });
+
+    if (!response.ok) {
+      throw new NotFoundException('Không thể tải nội dung file từ Supabase Storage');
+    }
+
+    return Buffer.from(await response.arrayBuffer());
+  }
+
+  private async uploadToSupabase(path: string, buffer: Buffer, mimetype: string) {
+    const { url, serviceRoleKey } = this.getSupabaseConfig();
+    const response = await fetch(`${url}/storage/v1/object/${this.storageBucket}/${this.encodeStoragePath(path)}`, {
+      method: 'POST',
+      headers: {
+        apikey: serviceRoleKey,
+        Authorization: `Bearer ${serviceRoleKey}`,
+        'Content-Type': mimetype,
+        'x-upsert': 'false',
+      },
+      body: buffer as any,
+    });
+
+    if (!response.ok) {
+      const detail = await response.text().catch(() => '');
+      throw new BadRequestException(`Không thể tải file lên Supabase Storage${detail ? `: ${detail}` : ''}`);
+    }
+  }
+
+  private async deleteAttachmentContent(path: string) {
+    const { url, serviceRoleKey } = this.getSupabaseConfig();
+    const response = await fetch(`${url}/storage/v1/object/${this.storageBucket}`, {
+      method: 'DELETE',
+      headers: {
+        apikey: serviceRoleKey,
+        Authorization: `Bearer ${serviceRoleKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ prefixes: [path] }),
+    });
+
+    if (!response.ok) {
+      throw new BadRequestException('Không thể xóa file trên Supabase Storage');
+    }
+  }
+
+  private getSupabaseConfig() {
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const url = process.env.SUPABASE_URL?.replace(/\/$/, '');
+    if (!url || !serviceRoleKey) {
+      throw new BadRequestException('Chưa cấu hình SUPABASE_URL hoặc SUPABASE_SERVICE_ROLE_KEY để lưu file');
+    }
+    return { url, serviceRoleKey };
+  }
+
+  private encodeStoragePath(path: string) {
+    return path.split('/').map(encodeURIComponent).join('/');
+  }
+
+  private validateFile(file: any) {
+    if (!file) throw new BadRequestException('Chưa chọn tệp đính kèm');
+    if (file.size > this.maxFileSize) throw new BadRequestException(`Tệp đính kèm "${file.originalname}" không được vượt quá 10MB`);
+    if (!this.allowedMimeTypes.has(file.mimetype)) {
+      throw new BadRequestException(`Định dạng tệp "${file.originalname}" không được hỗ trợ`);
+    }
+    const extension = extname(file.originalname || '').toLowerCase();
+    const allowedExtensions = this.allowedExtensionsByMime.get(file.mimetype) || [];
+    if (!allowedExtensions.includes(extension)) {
+      throw new BadRequestException(`Phần mở rộng tệp "${file.originalname}" không khớp định dạng được phép`);
+    }
+    if (!Buffer.isBuffer(file.buffer) || file.buffer.length === 0) {
+      throw new BadRequestException(`Tệp đính kèm "${file.originalname}" không hợp lệ`);
+    }
+    if (!this.hasValidSignature(file.mimetype, file.buffer)) {
+      throw new BadRequestException(`Nội dung tệp "${file.originalname}" không khớp định dạng được phép`);
+    }
+  }
+
+  private hasValidSignature(mimetype: string, buffer: Buffer) {
+    const startsWith = (signature: number[]) =>
+      signature.every((byte, index) => buffer[index] === byte);
+
+    if (mimetype === 'application/pdf') return startsWith([0x25, 0x50, 0x44, 0x46]);
+    if (mimetype === 'image/png') return startsWith([0x89, 0x50, 0x4e, 0x47]);
+    if (mimetype === 'image/jpeg') return startsWith([0xff, 0xd8, 0xff]);
+    if (
+      mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+      mimetype === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    ) {
+      return startsWith([0x50, 0x4b, 0x03, 0x04]) || startsWith([0x50, 0x4b, 0x05, 0x06]) || startsWith([0x50, 0x4b, 0x07, 0x08]);
+    }
+    if (mimetype === 'application/msword' || mimetype === 'application/vnd.ms-excel') {
+      return startsWith([0xd0, 0xcf, 0x11, 0xe0]);
+    }
+    if (mimetype === 'text/plain') {
+      return !buffer.includes(0);
+    }
+    return false;
   }
 
   /**

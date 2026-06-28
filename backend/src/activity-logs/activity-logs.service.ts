@@ -5,6 +5,15 @@ import { PrismaService } from '../prisma/prisma.service';
 export class ActivityLogsService {
   constructor(private prisma: PrismaService) {}
 
+  private parseDateBoundary(value: string, endOfDay = false) {
+    const suffix = endOfDay ? '23:59:59.999+07:00' : '00:00:00.000+07:00'
+    const date = new Date(`${value}T${suffix}`)
+    if (isNaN(date.getTime())) {
+      throw new BadRequestException(endOfDay ? 'Ngày kết thúc không hợp lệ' : 'Ngày bắt đầu không hợp lệ')
+    }
+    return date
+  }
+
   async log(userId: number, actionName: string, targetTable?: string, targetId?: number, detail?: string) {
     return this.prisma.activityLog.create({
       data: { user_id: userId, action_name: actionName, target_table: targetTable, target_id: targetId, action_detail: detail },
@@ -29,14 +38,10 @@ export class ActivityLogsService {
     if (query.date_from || query.date_to) {
       where.created_at = {};
       if (query.date_from) {
-        const d = new Date(query.date_from);
-        if (isNaN(d.getTime())) throw new BadRequestException('Ngày bắt đầu không hợp lệ');
-        where.created_at.gte = d;
+        where.created_at.gte = this.parseDateBoundary(query.date_from);
       }
       if (query.date_to) {
-        const d = new Date(`${query.date_to}T23:59:59.999Z`);
-        if (isNaN(d.getTime())) throw new BadRequestException('Ngày kết thúc không hợp lệ');
-        where.created_at.lte = d;
+        where.created_at.lte = this.parseDateBoundary(query.date_to, true);
       }
     }
 

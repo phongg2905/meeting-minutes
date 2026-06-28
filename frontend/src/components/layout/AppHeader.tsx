@@ -180,8 +180,12 @@ export default function AppHeader({
       navigate('/login')
       return
     }
-    if (key === 'profile' || key === 'change-password') {
+    if (key === 'profile') {
       navigate('/profile')
+      return
+    }
+    if (key === 'change-password') {
+      navigate('/profile?tab=password')
     }
   }
 

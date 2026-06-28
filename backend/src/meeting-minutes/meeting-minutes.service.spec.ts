@@ -201,6 +201,22 @@ describe('MeetingMinutesService permissions', () => {
     await expect(service.findOne(10, 99, 3)).rejects.toBeInstanceOf(ForbiddenException);
   });
 
+  it('filters the owner list when mine is requested and keeps created_by in list items', async () => {
+    const { service, prisma } = createService();
+    prisma.meetingMinute.findMany.mockResolvedValue([baseMinute]);
+    prisma.meetingMinute.count.mockResolvedValue(1);
+
+    const result = await service.findAll({ mine: 'true' } as any, 99, 2);
+
+    expect(prisma.meetingMinute.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ created_by: 99 }),
+    }));
+    expect(result.data[0]).toMatchObject({
+      minute_id: 10,
+      created_by: 2,
+    });
+  });
+
   it('returns a clear error when a provided minute code is duplicated', async () => {
     const { service, prisma } = createService();
     prisma.meetingMinute.create.mockRejectedValue(
@@ -242,5 +258,27 @@ describe('MeetingMinutesService permissions', () => {
         minute_code: 'BB-CUSTOM-01',
       }),
     }));
+  });
+
+  it('stores meeting times as UTC-based clock values to avoid timezone drift', async () => {
+    const { service, prisma } = createService();
+    prisma.meetingMinute.create.mockResolvedValue(baseMinute);
+
+    await service.create({
+      minute_code: 'BB-TIME',
+      type_id: 1,
+      title: 'Hop lop',
+      class_name: 'CNTT01',
+      meeting_date: '2026-05-18',
+      start_time: '08:00',
+      end_time: '09:00',
+      discussion_content: 'Noi dung',
+    }, 2);
+
+    const createArgs = prisma.meetingMinute.create.mock.calls[0][0];
+    expect((createArgs.data.start_time as Date).getUTCHours()).toBe(8);
+    expect((createArgs.data.start_time as Date).getUTCMinutes()).toBe(0);
+    expect((createArgs.data.end_time as Date).getUTCHours()).toBe(9);
+    expect((createArgs.data.end_time as Date).getUTCMinutes()).toBe(0);
   });
 });

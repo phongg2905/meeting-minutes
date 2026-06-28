@@ -18,9 +18,9 @@ export default function DashboardPage() {
   const navigate = useNavigate()
   const { user } = useAuthStore()
 
-  const { data: minutesData, isLoading, isError, refetch } = useQuery({
+  const { data: dashboardData, isLoading, isError, refetch } = useQuery({
     queryKey: ['meeting-minutes', 'dashboard', user?.user_id],
-    queryFn: () => meetingMinutesService.getAll({ limit: 100 }),
+    queryFn: meetingMinutesService.getDashboard,
     placeholderData: keepPreviousDataPlaceholder,
   })
 
@@ -32,15 +32,13 @@ export default function DashboardPage() {
   })
   const recentLogs = logsData?.data || []
 
-  const minutes: MeetingMinute[] = minutesData?.data || []
-  const stats = {
-    total: minutes.length,
-    public: minutes.filter(m => m.is_public).length,
-    private: minutes.filter(m => !m.is_public).length,
-    editing: minutes.filter(m => m.status === 'draft').length,
+  const stats = dashboardData?.stats || {
+    total: 0,
+    public: 0,
+    private: 0,
+    editing: 0,
   }
-
-  const recentMinutes = minutes.slice(0, 5)
+  const recentMinutes: MeetingMinute[] = dashboardData?.recentMinutes || []
 
   const columns = [
     {

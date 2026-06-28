@@ -189,6 +189,16 @@ export interface PaginatedResponse<T> {
   limit: number
 }
 
+export interface DashboardSummary {
+  stats: {
+    total: number
+    public: number
+    private: number
+    editing: number
+  }
+  recentMinutes: MeetingMinute[]
+}
+
 export interface AuthState {
   user: User | null
   token: string | null

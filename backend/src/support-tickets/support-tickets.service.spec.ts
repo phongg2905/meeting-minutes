@@ -50,7 +50,7 @@ describe('SupportTicketsService', () => {
         findMany: jest.fn().mockResolvedValue([mockTicket]),
         findUnique: jest.fn().mockResolvedValue(mockTicket),
         count: jest.fn().mockResolvedValue(1),
-        update: jest.fn().mockResolvedValue({ ...mockTicket }),
+        update: jest.fn().mockResolvedValue({ ...mockTicket, status: 'PROCESSING' }),
       },
       supportMessage: {
         create: jest.fn().mockResolvedValue(mockMessage),
@@ -58,7 +58,21 @@ describe('SupportTicketsService', () => {
       supportAttachment: {
         createMany: jest.fn().mockResolvedValue({ count: 0 }),
         create: jest.fn().mockResolvedValue({}),
+        findUnique: jest.fn().mockResolvedValue(null),
       },
+      // $transaction: execute callback with a tx object that mirrors the same mocks
+      $transaction: jest.fn().mockImplementation(async (callbackOrQueries) => {
+        if (typeof callbackOrQueries === 'function') {
+          const tx = {
+            supportTicket: prisma.supportTicket,
+            supportMessage: prisma.supportMessage,
+            supportAttachment: prisma.supportAttachment,
+          };
+          return callbackOrQueries(tx);
+        }
+        // Array of queries (not used in addMessage but keep compatible)
+        return Promise.all(callbackOrQueries);
+      }),
     };
 
     activityLogs = {

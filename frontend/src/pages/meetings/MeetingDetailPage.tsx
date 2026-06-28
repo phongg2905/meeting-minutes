@@ -129,6 +129,11 @@ export default function MeetingDetailPage() {
   const canEdit = canWriteMinutes(user?.role_id) && (isAdmin(user?.role_id) || minute.created_by === user?.user_id)
   const structuredSections = STRUCTURED_TEMPLATE_SECTIONS[minute.type_id] || []
   const templateData = minute.template_data || {}
+  const isStructuredMinute = structuredSections.length > 0
+  const isOtherMinute = minute.type_id === 7
+  const genericContent = minute.discussion_content && minute.discussion_content !== 'Chưa nhập nội dung'
+    ? minute.discussion_content
+    : minute.purpose
 
   const participantColumns = [
     { title: '#', key: 'index', width: 50, render: (_: any, __: any, i: number) => i + 1 },
@@ -211,13 +216,50 @@ export default function MeetingDetailPage() {
           )}
 
           <Divider orientation="left" style={{ fontSize: 14, color: 'var(--color-text)' }}>Nội dung theo cấu trúc biểu mẫu</Divider>
-          {minute.purpose && (
+          {isStructuredMinute && !isOtherMinute && minute.purpose && (
             <div style={{ marginBottom: 16 }}>
               <Text strong style={{ display: 'block', marginBottom: 6, color: 'var(--color-text)' }}>Mục đích:</Text>
               <Paragraph style={{ background: 'var(--color-surface-muted)', padding: '12px 16px', borderRadius: 8, margin: 0 }}>{minute.purpose}</Paragraph>
             </div>
           )}
-          {structuredSections.length ? (
+          {isOtherMinute ? (
+            <>
+              <div style={{ marginBottom: 16 }}>
+                <Text strong style={{ display: 'block', marginBottom: 6, color: 'var(--color-text)' }}>Trường:</Text>
+                <Paragraph style={{ background: 'var(--color-surface-muted)', padding: '12px 16px', borderRadius: 8, margin: 0 }}>
+                  {templateData.school_name || '—'}
+                </Paragraph>
+              </div>
+              <div style={{ marginBottom: 16 }}>
+                <Text strong style={{ display: 'block', marginBottom: 6, color: 'var(--color-text)' }}>Thầy/Cô tham dự:</Text>
+                {renderTemplateField({
+                  name: 'teachers',
+                  label: 'Thầy/Cô tham dự',
+                  type: 'table',
+                  columns: [
+                    { name: 'full_name', label: 'Họ tên' },
+                    { name: 'description', label: 'Vai trò / Ghi chú' },
+                  ],
+                }, templateData) || (
+                  <Paragraph style={{ background: 'var(--color-surface-muted)', padding: '12px 16px', borderRadius: 8, margin: 0 }}>
+                    —
+                  </Paragraph>
+                )}
+              </div>
+              <div style={{ marginBottom: 16 }}>
+                <Text strong style={{ display: 'block', marginBottom: 6, color: 'var(--color-text)' }}>Số bản biên bản được lập:</Text>
+                <Paragraph style={{ background: 'var(--color-surface-muted)', padding: '12px 16px', borderRadius: 8, margin: 0 }}>
+                  {templateData.copies_count || '—'}
+                </Paragraph>
+              </div>
+              <div style={{ marginBottom: 16 }}>
+                <Text strong style={{ display: 'block', marginBottom: 6, color: 'var(--color-text)' }}>Nội dung:</Text>
+                <Paragraph style={{ background: 'var(--color-surface-muted)', padding: '12px 16px', borderRadius: 8, margin: 0, whiteSpace: 'pre-wrap' }}>
+                  {genericContent}
+                </Paragraph>
+              </div>
+            </>
+          ) : structuredSections.length ? (
             structuredSections.map((section) => {
               const fields = section.fields
                 .map((field) => renderTemplateField(field, templateData))
@@ -237,7 +279,7 @@ export default function MeetingDetailPage() {
           ) : (
             <div style={{ marginBottom: 16 }}>
               <Text strong style={{ display: 'block', marginBottom: 6, color: 'var(--color-text)' }}>Nội dung:</Text>
-              <Paragraph style={{ background: 'var(--color-surface-muted)', padding: '12px 16px', borderRadius: 8, margin: 0, whiteSpace: 'pre-wrap' }}>{minute.discussion_content}</Paragraph>
+              <Paragraph style={{ background: 'var(--color-surface-muted)', padding: '12px 16px', borderRadius: 8, margin: 0, whiteSpace: 'pre-wrap' }}>{genericContent}</Paragraph>
             </div>
           )}
           {minute.conclusion_content && (

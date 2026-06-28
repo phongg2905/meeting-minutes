@@ -46,7 +46,7 @@ export class MinuteTasksService {
     if (!task) throw new NotFoundException('Không tìm thấy nhiệm vụ');
     await this.assertMinuteWriteAccess(task.minute_id, userId, roleId);
     const deleted = await this.prisma.minuteTask.delete({ where: { task_id: id } });
-    await this.activityLogs.log(userId, 'DELETE', 'minute_tasks', id, `Xóa nhiem vu ${id}`);
+    await this.activityLogs.log(userId, 'DELETE', 'minute_tasks', id, `Xóa nhiệm vụ ${id}`);
     return deleted;
   }
 
@@ -54,7 +54,7 @@ export class MinuteTasksService {
     const minute = await this.prisma.meetingMinute.findUnique({ where: { minute_id: minuteId } });
     if (!minute) throw new NotFoundException('Không tìm thấy biên bản');
     if (!isSystemAdmin(roleId) && minute.created_by !== userId && !(minute.status === 'completed' && isPublicMinute(minute))) {
-      throw new ForbiddenException('Ban khong co quyen thao tac voi nhiem vu cua biên bản nay');
+      throw new ForbiddenException('Bạn không có quyền truy cập vào biên bản này');
     }
     return minute;
   }
@@ -62,7 +62,7 @@ export class MinuteTasksService {
   private async assertMinuteWriteAccess(minuteId: number, userId: number, roleId: number) {
     const minute = await this.assertMinuteAccess(minuteId, userId, roleId);
     if (!canManageMinute(roleId, userId, minute.created_by)) {
-      throw new ForbiddenException('Ban khong co quyen thay doi nhiem vu cua biên bản nay');
+      throw new ForbiddenException('Bạn không có quyền thay đổi nhiệm vụ của biên bản này');
     }
   }
 }
