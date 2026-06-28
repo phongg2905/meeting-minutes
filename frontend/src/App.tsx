@@ -18,7 +18,6 @@ const ProfilePage = lazy(() => import('./pages/ProfilePage'))
 const PublicMeetingsListPage = lazy(() => import('./pages/public/PublicMeetingsListPage'))
 const PublicMeetingDetailPage = lazy(() => import('./pages/public/PublicMeetingDetailPage'))
 const PublicMeetingPrintPage = lazy(() => import('./pages/public/PublicMeetingPrintPage'))
-const SupportRequestsPage = lazy(() => import('./pages/support/SupportRequestsPage'))
 const SupportTicketsPage = lazy(() => import('./pages/support/SupportTicketsPage'))
 const SystemHealthPage = lazy(() => import('./pages/admin/SystemHealthPage'))
 const ManagerRoleRequestPage = lazy(() => import('./pages/manager/ManagerRoleRequestPage'))
@@ -69,6 +68,7 @@ export default function App() {
         >
           <Route path="dashboard" element={<DashboardPage />} />
           <Route path="meetings" element={<MeetingsListPage />} />
+          <Route path="meetings/mine" element={<MeetingsListPage scope="mine" />} />
           <Route path="meetings/create" element={<MeetingCreatePage />} />
           <Route path="meetings/:id" element={<MeetingDetailPage />} />
           <Route path="meetings/:id/edit" element={<MeetingEditPage />} />

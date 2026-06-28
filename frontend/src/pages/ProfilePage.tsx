@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Card, Form, Input, Button, Avatar, Typography, Row, Col, Divider, message, Tag } from 'antd'
 import { UserOutlined, LockOutlined, SaveOutlined } from '@ant-design/icons'
 import { useMutation } from '@tanstack/react-query'
+import { useSearchParams } from 'react-router-dom'
 import { authService, usersService } from '../services'
 import { useAuthStore } from '../store/authStore'
 import { formatDateTime } from '../utils'
@@ -10,9 +11,16 @@ const { Title, Text } = Typography
 
 export default function ProfilePage() {
   const { user, setUser } = useAuthStore()
+  const [searchParams] = useSearchParams()
   const [profileForm] = Form.useForm()
   const [pwdForm] = Form.useForm()
-  const [activeTab, setActiveTab] = useState<'info' | 'password'>('info')
+  const [activeTab, setActiveTab] = useState<'info' | 'password'>(
+    searchParams.get('tab') === 'password' ? 'password' : 'info',
+  )
+
+  useEffect(() => {
+    setActiveTab(searchParams.get('tab') === 'password' ? 'password' : 'info')
+  }, [searchParams])
 
   const updateMutation = useMutation({
     mutationFn: (data: any) => usersService.updateMe(data),

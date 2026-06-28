@@ -67,6 +67,46 @@ function normalizeTemplateData(templateData?: Record<string, any>) {
   return templateData
 }
 
+function normalizeParticipantsForForm(participants?: any[]) {
+  if (!Array.isArray(participants)) return []
+  return participants.map((participant) => ({
+    full_name: participant.full_name,
+    role_in_meeting: participant.role_in_meeting,
+    attendance_status: participant.attendance_status || 'present',
+  }))
+}
+
+function normalizeTasksForForm(tasks?: any[]) {
+  if (!Array.isArray(tasks)) return []
+  return tasks.map((task) => ({
+    task_content: task.task_content,
+    assigned_to: task.assigned_to,
+    deadline: task.deadline ? dayjs(task.deadline).format('YYYY-MM-DD') : undefined,
+    task_status: task.task_status || 'pending',
+  }))
+}
+
+function toParticipantPayload(participants?: any[]) {
+  return Array.isArray(participants)
+    ? participants.map((participant) => ({
+      full_name: participant.full_name,
+      role_in_meeting: participant.role_in_meeting,
+      attendance_status: participant.attendance_status,
+    }))
+    : []
+}
+
+function toTaskPayload(tasks?: any[]) {
+  return Array.isArray(tasks)
+    ? tasks.map((task) => ({
+      task_content: task.task_content,
+      assigned_to: task.assigned_to,
+      deadline: task.deadline,
+      task_status: task.task_status,
+    }))
+    : []
+}
+
 export default function MeetingForm({ initialValues, onSubmit, loading, mode = 'create' }: Props) {
   const [form] = Form.useForm()
   const selectedTypeId = Form.useWatch('type_id', form)
@@ -92,10 +132,8 @@ export default function MeetingForm({ initialValues, onSubmit, loading, mode = '
       start_time: initialValues.start_time ? dayjs(`1970-01-01T${formatTime(initialValues.start_time)}`) : null,
       end_time: initialValues.end_time ? dayjs(`1970-01-01T${formatTime(initialValues.end_time)}`) : null,
       template_data: normalizeTemplateData(initialValues.template_data),
-      tasks: initialValues.tasks?.map((task) => ({
-        ...task,
-        deadline: task.deadline ? dayjs(task.deadline).format('YYYY-MM-DD') : undefined,
-      })),
+      participants: normalizeParticipantsForForm(initialValues.participants),
+      tasks: normalizeTasksForForm(initialValues.tasks),
     })
   }, [initialValues, form])
 
@@ -139,9 +177,9 @@ export default function MeetingForm({ initialValues, onSubmit, loading, mode = '
       end_time: values.end_time?.format('HH:mm'),
       host_name: templateHostName || values.host_name,
       secretary_name: templateSecretaryName || values.secretary_name,
-      discussion_content: structuredContent || values.discussion_content || 'Chưa nhập nội dung',
-      participants: values.participants || [],
-      tasks: values.tasks || [],
+      discussion_content: structuredContent || values.discussion_content || values.purpose || 'Chưa nhập nội dung',
+      participants: toParticipantPayload(values.participants),
+      tasks: toTaskPayload(values.tasks),
     })
   }
 
@@ -270,11 +308,21 @@ export default function MeetingForm({ initialValues, onSubmit, loading, mode = '
             </Form.Item>
           </Col>
           <Col xs={24} md={12}>
-            <Form.Item label="Loại biên bản" name="type_id" rules={[{ required: true, message: 'Chọn loại biên bản' }]}>
+            <Form.Item
+              label="Loại biên bản"
+              name="type_id"
+              rules={[{ required: true, message: 'Chọn loại biên bản' }]}
+            >
               <Select
                 placeholder="Chọn loại biên bản"
+                allowClear
                 onChange={handleTypeChange}
-                options={(types || []).map((type: MinuteType) => ({ value: type.type_id, label: getMinuteTypeName(type.type_id, type.type_name) }))}
+                options={[
+                  ...(types || []).map((type: MinuteType) => ({
+                    value: type.type_id,
+                    label: getMinuteTypeName(type.type_id, type.type_name),
+                  })),
+                ]}
               />
             </Form.Item>
           </Col>
@@ -283,7 +331,7 @@ export default function MeetingForm({ initialValues, onSubmit, loading, mode = '
               type="info"
               showIcon
               style={{ marginBottom: 16 }}
-              message={selectedTypeName || 'Chọn loại biên bản để nạp đúng mẫu'}
+              message={selectedTypeName || 'Chưa chọn loại biên bản'}
               description="Sau khi chọn loại, hệ thống hiển thị các trường nhập cố định theo mẫu. Dữ liệu vẫn được tổng hợp thành nội dung biên bản khi lưu."
               action={selectedTypeId ? (
                 <Button size="small" icon={<FileTextOutlined />} onClick={() => applyTemplate(selectedTypeId, true)}>

@@ -11,6 +11,7 @@ export class QueryMeetingMinuteDto {
   @IsOptional() @IsString() meeting_form?: string;
   @IsOptional() @IsString() date_from?: string;
   @IsOptional() @IsString() date_to?: string;
+  @IsOptional() @IsString() mine?: string;
   @IsOptional() @IsString() page?: string;
   @IsOptional() @IsString() limit?: string;
 }

@@ -175,7 +175,8 @@ export default function AppSidebar({ collapsed, onToggle, mobileOpen, onMobileCl
       label: 'Biên bản họp',
       selectable: false,
       children: [
-        { id: 'meetings-list', key: '/meetings', href: '/meetings', match: 'prefix' as const, icon: <FileTextOutlined />, label: 'Danh sách', selectable: true },
+        { id: 'meetings-list', key: '/meetings', href: '/meetings', match: 'prefix' as const, icon: <FileTextOutlined />, label: 'Danh sách biên bản', selectable: true },
+        { id: 'meetings-mine', key: '/meetings/mine', href: '/meetings/mine', icon: <FileTextOutlined />, label: 'Biên bản của tôi', selectable: true },
         ...(canWriteMinutes(user?.role_id) ? [{ id: 'meetings-create', key: '/meetings/create', href: '/meetings/create', icon: <PlusOutlined />, label: 'Tạo mới', selectable: true }] : []),
       ],
     },
@@ -247,10 +248,17 @@ export default function AppSidebar({ collapsed, onToggle, mobileOpen, onMobileCl
 
       case path === '/meetings' || path.startsWith('/meetings'):
         queryClient.prefetchQuery({
-          queryKey: ['meeting-minutes', user?.user_id, { page: 1, limit: 10 }],
+          queryKey: ['meeting-minutes', user?.user_id, 'all', { page: 1, limit: 10 }],
           queryFn: () => meetingMinutesService.getAll({ page: 1, limit: 10 }),
           staleTime: 60000,
         })
+        if (path === '/meetings/mine') {
+          queryClient.prefetchQuery({
+            queryKey: ['meeting-minutes', user?.user_id, 'mine', { page: 1, limit: 10, mine: 'true' }],
+            queryFn: () => meetingMinutesService.getAll({ page: 1, limit: 10, mine: 'true' }),
+            staleTime: 60000,
+          })
+        }
         queryClient.prefetchQuery({
           queryKey: ['minute-types'],
           queryFn: () => minuteTypesService.getAll(),

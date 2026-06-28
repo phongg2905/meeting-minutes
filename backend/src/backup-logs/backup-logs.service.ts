@@ -21,6 +21,15 @@ export class BackupLogsService {
     private activityLogs: ActivityLogsService,
   ) {}
 
+  private parseDateBoundary(value: string, endOfDay = false) {
+    const suffix = endOfDay ? '23:59:59.999+07:00' : '00:00:00.000+07:00';
+    const date = new Date(`${value}T${suffix}`);
+    if (isNaN(date.getTime())) {
+      throw new BadRequestException(endOfDay ? 'Ngày kết thúc không hợp lệ' : 'Ngày bắt đầu không hợp lệ');
+    }
+    return date;
+  }
+
   async findAll(query: any = {}) {
     const page = Math.max(Number(query.page) || 1, 1);
     const limit = Math.min(Math.max(Number(query.limit) || 10, 1), 100);
@@ -37,14 +46,10 @@ export class BackupLogsService {
     if (query.date_from || query.date_to) {
       where.created_at = {};
       if (query.date_from) {
-        const d = new Date(query.date_from);
-        if (isNaN(d.getTime())) throw new BadRequestException('Ngày bắt đầu không hợp lệ');
-        where.created_at.gte = d;
+        where.created_at.gte = this.parseDateBoundary(query.date_from);
       }
       if (query.date_to) {
-        const d = new Date(`${query.date_to}T23:59:59.999Z`);
-        if (isNaN(d.getTime())) throw new BadRequestException('Ngày kết thúc không hợp lệ');
-        where.created_at.lte = d;
+        where.created_at.lte = this.parseDateBoundary(query.date_to, true);
       }
     }
 
@@ -84,7 +89,10 @@ export class BackupLogsService {
       minuteParticipants,
       minuteAttachments,
       supportRequests,
+      supportMessages,
+      supportAttachments,
       managerRoleRequests,
+      notifications,
       activityLogs,
       backupLogs,
     ] = await Promise.all([
@@ -96,11 +104,15 @@ export class BackupLogsService {
       this.prisma.minuteParticipant.findMany({ orderBy: { participant_id: 'asc' } }),
       this.prisma.minuteAttachment.findMany({ orderBy: { attachment_id: 'asc' } }),
       this.prisma.supportTicket.findMany({ orderBy: { ticket_id: 'asc' } }),
+      this.prisma.supportMessage.findMany({ orderBy: { message_id: 'asc' } }),
+      this.prisma.supportAttachment.findMany({ orderBy: { attachment_id: 'asc' } }),
       this.prisma.managerRoleRequest.findMany({ orderBy: { request_id: 'asc' } }),
+      this.prisma.notification.findMany({ orderBy: { notification_id: 'asc' } }),
       this.prisma.activityLog.findMany({ orderBy: { log_id: 'asc' } }),
       this.prisma.backupLog.findMany({ orderBy: { backup_id: 'asc' } }),
     ]);
 
+    // Minute attachments – always read file content; fail loudly if unreadable
     const attachmentsWithContent = await Promise.all(
       minuteAttachments.map(async (attachment) => {
         let file_content_base64: string | null = null;
@@ -114,9 +126,42 @@ export class BackupLogsService {
       }),
     );
 
+    // Support attachments – read file content from storage (best-effort)
+    const supportAttachmentsWithContent = await Promise.all(
+      supportAttachments.map(async (attachment) => {
+        let file_content_base64: string | null = null;
+        try {
+          const content = await this.readSupportAttachmentObject(attachment.file_path);
+          file_content_base64 = content.toString('base64');
+        } catch {
+          file_content_base64 = null;
+        }
+        return { ...attachment, file_content_base64 };
+      }),
+    );
+
     const payload = {
       version: this.backupVersion,
       exported_at: new Date().toISOString(),
+      metadata: {
+        recordCounts: {
+          roles: roles.length,
+          minuteTypes: minuteTypes.length,
+          users: users.length,
+          meetingMinutes: meetingMinutes.length,
+          minuteTasks: minuteTasks.length,
+          minuteParticipants: minuteParticipants.length,
+          minuteAttachments: minuteAttachments.length,
+          supportRequests: supportRequests.length,
+          supportMessages: supportMessages.length,
+          supportAttachments: supportAttachments.length,
+          managerRoleRequests: managerRoleRequests.length,
+          notifications: notifications.length,
+          activityLogs: activityLogs.length,
+          backupLogs: backupLogs.length,
+        },
+        fileCount: minuteAttachments.length + supportAttachments.length,
+      },
       data: {
         roles,
         minuteTypes,
@@ -126,7 +171,10 @@ export class BackupLogsService {
         minuteParticipants,
         minuteAttachments: attachmentsWithContent,
         supportRequests,
+        supportMessages,
+        supportAttachments: supportAttachmentsWithContent,
         managerRoleRequests,
+        notifications,
         activityLogs,
         backupLogs,
       },
@@ -240,7 +288,7 @@ export class BackupLogsService {
         },
       });
 
-      await this.activityLogs.log(adminId, 'BACKUP', 'backup_logs', logEntry.backup_id, `Backup tu dong: ${fileName}`);
+      await this.activityLogs.log(adminId, 'BACKUP', 'backup_logs', logEntry.backup_id, `Backup tự động: ${fileName}`);
       await this.cleanupExpiredBackups();
 
       return { backupId: logEntry.backup_id, fileName, status: 'SUCCESS' };
@@ -264,21 +312,32 @@ export class BackupLogsService {
   // ─── Restore ───
   async restore(userId: number, dto: RestoreBackupDto) {
     if (dto.confirmation !== 'RESTORE') {
-      throw new BadRequestException('Vui long nhap RESTORE de xac nhan khoi phuc du lieu');
+      throw new BadRequestException('vui lòng xác nhận bằng cách nhập "RESTORE" để thực hiện khôi phục');
     }
 
     const backup = await this.prisma.backupLog.findUnique({
       where: { backup_id: dto.backup_id },
     });
     if (!backup || !backup.file_path) {
-      throw new NotFoundException('Khong tim thay ban sao luu hop le');
+      throw new NotFoundException('Không tìm thấy bản ghi backup hoặc file backup không tồn tại');
     }
 
+    // ── Đọc và validate file backup trước khi thay đổi bất cứ điều gì ──
     const raw = (await this.readBackupObject(backup.file_path)).toString('utf-8');
     const parsed = this.decryptBackupPayload(JSON.parse(raw));
     this.validateBackupPayload(parsed);
     const data = parsed.data;
 
+    // ── Tự động backup hệ thống hiện tại trước khi khôi phục ──
+    this.logger.log(`🔒 Tạo safety backup trước khi restore (bởi user ${userId})...`);
+    try {
+      await this.performBackup(userId);
+    } catch (safetyErr: any) {
+      this.logger.warn(`⚠️ Không thể tạo safety backup trước restore: ${safetyErr.message}`);
+      // Không block restore nếu safety backup thất bại
+    }
+
+    // ── Map dữ liệu ──
     const users = data.users?.map((item: any) => ({
       ...item,
       created_at: new Date(item.created_at),
@@ -315,12 +374,34 @@ export class BackupLogsService {
       ...item,
       created_at: new Date(item.created_at),
       updated_at: item.updated_at ? new Date(item.updated_at) : null,
+      last_message_at: item.last_message_at ? new Date(item.last_message_at) : null,
+    })) ?? [];
+
+    const supportMessages = data.supportMessages?.map((item: any) => ({
+      ...item,
+      sent_at: item.sent_at ? new Date(item.sent_at) : new Date(item.created_at ?? Date.now()),
+    })) ?? [];
+
+    const supportAttachments = data.supportAttachments?.map((item: any) => ({
+      attachment_id: item.attachment_id,
+      message_id: item.message_id,
+      file_name: item.file_name,
+      file_path: item.file_path,
+      file_type: item.file_type,
+      file_size: item.file_size,
+      uploaded_by: item.uploaded_by,
+      uploaded_at: item.uploaded_at ? new Date(item.uploaded_at) : new Date(),
     })) ?? [];
 
     const managerRoleRequests = data.managerRoleRequests?.map((item: any) => ({
       ...item,
       created_at: new Date(item.created_at),
       updated_at: item.updated_at ? new Date(item.updated_at) : null,
+    })) ?? [];
+
+    const notifications = data.notifications?.map((item: any) => ({
+      ...item,
+      created_at: item.created_at ? new Date(item.created_at) : new Date(),
     })) ?? [];
 
     const activityLogs = data.activityLogs?.map((item: any) => ({
@@ -333,7 +414,11 @@ export class BackupLogsService {
       created_at: new Date(item.created_at),
     })) ?? [];
 
-    const queries: any[] = [
+    // ── Xóa theo đúng thứ tự FK: child trước, parent sau ──
+    const deleteQueries: any[] = [
+      this.prisma.notification.deleteMany(),
+      this.prisma.supportAttachment.deleteMany(),
+      this.prisma.supportMessage.deleteMany(),
       this.prisma.minuteAttachment.deleteMany(),
       this.prisma.minuteParticipant.deleteMany(),
       this.prisma.minuteTask.deleteMany(),
@@ -347,46 +432,74 @@ export class BackupLogsService {
       this.prisma.role.deleteMany(),
     ];
 
-    if (data.roles?.length) queries.push(this.prisma.role.createMany({ data: data.roles }));
-    if (data.minuteTypes?.length) queries.push(this.prisma.minuteType.createMany({ data: data.minuteTypes }));
-    if (users.length) queries.push(this.prisma.user.createMany({ data: users }));
-    if (meetingMinutes.length) queries.push(this.prisma.meetingMinute.createMany({ data: meetingMinutes }));
-    if (minuteTasks.length) queries.push(this.prisma.minuteTask.createMany({ data: minuteTasks }));
-    if (data.minuteParticipants?.length) {
-      queries.push(this.prisma.minuteParticipant.createMany({ data: data.minuteParticipants }));
-    }
-    if (minuteAttachments.length) queries.push(this.prisma.minuteAttachment.createMany({ data: minuteAttachments }));
-    if (supportTickets.length) queries.push(this.prisma.supportTicket.createMany({ data: supportTickets }));
-    if (managerRoleRequests.length) {
-      queries.push(this.prisma.managerRoleRequest.createMany({ data: managerRoleRequests }));
-    }
-    if (activityLogs.length) queries.push(this.prisma.activityLog.createMany({ data: activityLogs }));
-    if (backupLogs.length) queries.push(this.prisma.backupLog.createMany({ data: backupLogs }));
+    // ── Chèn theo đúng thứ tự FK: parent trước, child sau ──
+    const insertQueries: any[] = [];
+    if (data.roles?.length) insertQueries.push(this.prisma.role.createMany({ data: data.roles }));
+    if (data.minuteTypes?.length) insertQueries.push(this.prisma.minuteType.createMany({ data: data.minuteTypes }));
+    if (users.length) insertQueries.push(this.prisma.user.createMany({ data: users }));
+    if (meetingMinutes.length) insertQueries.push(this.prisma.meetingMinute.createMany({ data: meetingMinutes }));
+    if (minuteTasks.length) insertQueries.push(this.prisma.minuteTask.createMany({ data: minuteTasks }));
+    if (data.minuteParticipants?.length) insertQueries.push(this.prisma.minuteParticipant.createMany({ data: data.minuteParticipants }));
+    if (minuteAttachments.length) insertQueries.push(this.prisma.minuteAttachment.createMany({ data: minuteAttachments }));
+    if (supportTickets.length) insertQueries.push(this.prisma.supportTicket.createMany({ data: supportTickets }));
+    if (supportMessages.length) insertQueries.push(this.prisma.supportMessage.createMany({ data: supportMessages }));
+    if (supportAttachments.length) insertQueries.push(this.prisma.supportAttachment.createMany({ data: supportAttachments }));
+    if (managerRoleRequests.length) insertQueries.push(this.prisma.managerRoleRequest.createMany({ data: managerRoleRequests }));
+    if (notifications.length) insertQueries.push(this.prisma.notification.createMany({ data: notifications }));
+    if (activityLogs.length) insertQueries.push(this.prisma.activityLog.createMany({ data: activityLogs }));
+    if (backupLogs.length) insertQueries.push(this.prisma.backupLog.createMany({ data: backupLogs }));
 
-    await this.prisma.$transaction(queries);
+    // ── Thực thi trong transaction ──
+    await this.prisma.$transaction([...deleteQueries, ...insertQueries]);
+
+    // ── Khôi phục file đính kèm lên Storage ──
+    const storageErrors: string[] = [];
 
     if (data.minuteAttachments?.length) {
       await Promise.all(
         data.minuteAttachments.map(async (attachment: any) => {
           if (!attachment.file_content_base64) return;
-          await this.uploadStorageObject(
-            attachment.file_path,
-            Buffer.from(attachment.file_content_base64, 'base64'),
-            attachment.file_type || 'application/octet-stream',
-          );
+          try {
+            await this.uploadStorageObject(
+              attachment.file_path,
+              Buffer.from(attachment.file_content_base64, 'base64'),
+              attachment.file_type || 'application/octet-stream',
+            );
+          } catch (e: any) {
+            storageErrors.push(`minute-attachment:${attachment.file_name}: ${e.message}`);
+          }
         }),
       );
     }
 
+    if (data.supportAttachments?.length) {
+      await Promise.all(
+        data.supportAttachments.map(async (attachment: any) => {
+          if (!attachment.file_content_base64) return;
+          try {
+            await this.uploadSupportAttachmentObject(
+              attachment.file_path,
+              Buffer.from(attachment.file_content_base64, 'base64'),
+              attachment.file_type || 'application/octet-stream',
+            );
+          } catch (e: any) {
+            storageErrors.push(`support-attachment:${attachment.file_name}: ${e.message}`);
+          }
+        }),
+      );
+    }
+
+    if (storageErrors.length > 0) {
+      this.logger.warn(`⚠️ Một số file không thể khôi phục lên Storage:\n${storageErrors.join('\n')}`);
+    }
+
+    // ── Reset sequences ──
     await this.resetSequences();
 
+    // ── Ghi log restore ──
     const existingSourceBackup = await this.prisma.backupLog.findFirst({
-      where: {
-        action_type: 'backup',
-        file_path: backup.file_path,
-      },
+      where: { action_type: 'backup', file_path: backup.file_path },
     });
-
     if (!existingSourceBackup) {
       await this.prisma.backupLog.create({
         data: {
@@ -417,7 +530,7 @@ export class BackupLogsService {
         'RESTORE',
         'backup_logs',
         restoreLog.backup_id,
-        `Khoi phuc tu backup: ${backup.file_name}`,
+        `Khôi phục thành công: ${backup.file_name}`,
       );
     } catch {
       restoreLog = {
@@ -431,7 +544,10 @@ export class BackupLogsService {
       };
     }
 
-    return restoreLog;
+    return {
+      ...restoreLog,
+      storageWarnings: storageErrors.length > 0 ? storageErrors : undefined,
+    };
   }
 
   // ─── Status API ───
@@ -518,7 +634,7 @@ export class BackupLogsService {
     });
 
     if (!log) {
-      throw new NotFoundException('Khong tim thay ban ghi backup');
+      throw new NotFoundException('Không tìm thấy bản ghi backup để xóa');
     }
 
     await this.prisma.backupLog.delete({
@@ -539,22 +655,26 @@ export class BackupLogsService {
       }
     }
 
-    await this.activityLogs.log(userId, 'DELETE', 'backup_logs', backupId, `Xoa ban ghi backup: ${log.file_name || backupId}`);
+    await this.activityLogs.log(userId, 'DELETE', 'backup_logs', backupId, `Xóa bản ghi backup: ${log.file_name || backupId}`);
     return { success: true };
   }
 
   private assertBackupEncryptionReady() {
     if (process.env.NODE_ENV === 'production' && !process.env.BACKUP_ENCRYPTION_KEY) {
-      throw new BadRequestException('Chua cau hinh BACKUP_ENCRYPTION_KEY de ma hoa backup');
+      throw new BadRequestException('Chưa cấu hình BACKUP_ENCRYPTION_KEY để mã hóa backup');
     }
   }
 
   private async readStorageObject(path: string) {
-    return this.readObjectFromBucket(this.attachmentBucket, path, 'Khong the doc file dinh kem tu Supabase Storage');
+    return this.readObjectFromBucket(this.attachmentBucket, path, 'Không thể đọc file đính kèm từ Supabase Storage');
+  }
+
+  private async readSupportAttachmentObject(path: string) {
+    return this.readObjectFromBucket(this.attachmentBucket, path, 'Không thể đọc file đính kèm hỗ trợ từ Supabase Storage');
   }
 
   private async readBackupObject(path: string) {
-    return this.readObjectFromBucket(this.backupBucket, path, 'Khong the doc file backup tu Supabase Storage');
+    return this.readObjectFromBucket(this.backupBucket, path, 'Không thể đọc file backup từ Supabase Storage');
   }
 
   private async readObjectFromBucket(bucket: string, path: string, errorMessage: string) {
@@ -579,7 +699,17 @@ export class BackupLogsService {
       path,
       content,
       mimetype,
-      'Khong the ghi file dinh kem len Supabase Storage',
+      'Không thể ghi file đính kèm lên Supabase Storage',
+    );
+  }
+
+  private async uploadSupportAttachmentObject(path: string, content: Buffer, mimetype: string) {
+    return this.uploadObjectToBucket(
+      this.attachmentBucket,
+      path,
+      content,
+      mimetype,
+      'Không thể ghi file đính kèm hỗ trợ lên Supabase Storage',
     );
   }
 
@@ -589,7 +719,7 @@ export class BackupLogsService {
       path,
       content,
       mimetype,
-      'Khong the ghi file backup len Supabase Storage',
+      'Không thể ghi file backup lên Supabase Storage',
     );
   }
 
@@ -622,7 +752,7 @@ export class BackupLogsService {
     });
 
     if (!response.ok && response.status !== 404) {
-      throw new BadRequestException('Khong the xoa file backup tren Supabase Storage');
+      throw new BadRequestException('Không thể xóa file backup trên Supabase Storage');
     }
   }
 
@@ -699,7 +829,7 @@ export class BackupLogsService {
     if (!payload?.encrypted) return payload;
     const key = this.getBackupEncryptionKey();
     if (!key) {
-      throw new BadRequestException('Backup da duoc ma hoa nhung chua cau hinh BACKUP_ENCRYPTION_KEY');
+      throw new BadRequestException('Backup đã được mã hóa nhưng chưa cấu hình BACKUP_ENCRYPTION_KEY');
     }
 
     const decipher = createDecipheriv('aes-256-gcm', key, Buffer.from(payload.iv, 'base64'));
@@ -719,13 +849,13 @@ export class BackupLogsService {
 
   private validateBackupPayload(payload: any) {
     if (!payload || !payload.data) {
-      throw new BadRequestException('File backup khong hop le hoac bi hong');
+      throw new BadRequestException('File backup không hợp lệ hoặc bị hỏng');
     }
     if (payload.version !== this.backupVersion) {
-      throw new BadRequestException(`Phien ban backup (v${payload.version}) khong tuong thich voi he thong (v${this.backupVersion}). Vui long su dung dung file backup.`);
+      throw new BadRequestException(`Phiên bản backup (v${payload.version}) không tương thích với hệ thống (v${this.backupVersion}). Vui lòng sử dụng đúng file backup.`);
     }
     if (!payload.exported_at) {
-      throw new BadRequestException('File backup thieu thong tin thoi gian xuat');
+      throw new BadRequestException('File backup thiếu thông tin thời gian xuất');
     }
 
     const requiredArrays = [
@@ -743,18 +873,18 @@ export class BackupLogsService {
     ];
     for (const key of requiredArrays) {
       if (payload.data[key] !== undefined && !Array.isArray(payload.data[key])) {
-        throw new BadRequestException(`Du lieu backup khong hop le: ${key}`);
+        throw new BadRequestException(`Dữ liệu backup không hợp lệ: ${key}`);
       }
     }
 
     if (!Array.isArray(payload.data.roles) || payload.data.roles.length === 0) {
-      throw new BadRequestException('File backup thieu du lieu roles');
+      throw new BadRequestException('File backup thiếu dữ liệu roles');
     }
     if (!Array.isArray(payload.data.users) || payload.data.users.length === 0) {
-      throw new BadRequestException('File backup thieu du lieu users');
+      throw new BadRequestException('File backup thiếu dữ liệu users');
     }
     if (!Array.isArray(payload.data.minuteTypes) || payload.data.minuteTypes.length === 0) {
-      throw new BadRequestException('File backup thieu du lieu minuteTypes');
+      throw new BadRequestException('File backup thiếu dữ liệu minuteTypes');
     }
   }
 
@@ -768,7 +898,10 @@ export class BackupLogsService {
       `SELECT setval(pg_get_serial_sequence('"minute_participants"', 'participant_id'), COALESCE(MAX(participant_id), 1), MAX(participant_id) IS NOT NULL) FROM "minute_participants";`,
       `SELECT setval(pg_get_serial_sequence('"minute_attachments"', 'attachment_id'), COALESCE(MAX(attachment_id), 1), MAX(attachment_id) IS NOT NULL) FROM "minute_attachments";`,
       `SELECT setval(pg_get_serial_sequence('"support_requests"', 'request_id'), COALESCE(MAX(request_id), 1), MAX(request_id) IS NOT NULL) FROM "support_requests";`,
+      `SELECT setval(pg_get_serial_sequence('"support_messages"', 'message_id'), COALESCE(MAX(message_id), 1), MAX(message_id) IS NOT NULL) FROM "support_messages";`,
+      `SELECT setval(pg_get_serial_sequence('"support_attachments"', 'attachment_id'), COALESCE(MAX(attachment_id), 1), MAX(attachment_id) IS NOT NULL) FROM "support_attachments";`,
       `SELECT setval(pg_get_serial_sequence('"manager_role_requests"', 'request_id'), COALESCE(MAX(request_id), 1), MAX(request_id) IS NOT NULL) FROM "manager_role_requests";`,
+      `SELECT setval(pg_get_serial_sequence('"notifications"', 'notification_id'), COALESCE(MAX(notification_id), 1), MAX(notification_id) IS NOT NULL) FROM "notifications";`,
       `SELECT setval(pg_get_serial_sequence('"activity_logs"', 'log_id'), COALESCE(MAX(log_id), 1), MAX(log_id) IS NOT NULL) FROM "activity_logs";`,
       `SELECT setval(pg_get_serial_sequence('"backup_logs"', 'backup_id'), COALESCE(MAX(backup_id), 1), MAX(backup_id) IS NOT NULL) FROM "backup_logs";`,
     ];

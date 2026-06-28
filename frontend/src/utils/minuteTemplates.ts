@@ -9,6 +9,7 @@ export const MINUTE_TYPE_NAMES: Record<number, string> = {
   4: 'Mẫu biên bản họp lớp tổng kết cuối kì',
   5: 'Mẫu biên bản họp lớp kỷ luật học sinh',
   6: 'Mẫu biên bản họp lớp đầu năm học',
+  7: 'Khác',
 }
 
 type TemplateDefaults = {
@@ -765,6 +766,34 @@ export const STRUCTURED_TEMPLATE_SECTIONS: Record<
       ],
     },
   ],
+
+  7: [
+    {
+      title: 'Thông tin chung',
+      fields: [
+        {
+          name: 'school_name',
+          label: 'Trường',
+          placeholder: 'VD: Trường THPT ...',
+        },
+        {
+          name: 'teachers',
+          label: 'Thầy/Cô tham dự',
+          type: 'table',
+          columns: [
+            { name: 'full_name', label: 'Họ tên', placeholder: 'Họ tên thầy/cô' },
+            { name: 'description', label: 'Vai trò / Ghi chú', placeholder: 'VD: Giáo viên chủ nhiệm / Đại diện ban giám hiệu' },
+          ],
+        },
+        {
+          name: 'copies_count',
+          label: 'Số bản biên bản được lập',
+          type: 'number',
+          placeholder: 'VD: 2',
+        },
+      ],
+    },
+  ],
 }
 
 export const STRUCTURED_TEMPLATE_DEFAULT_DATA: Record<
@@ -841,6 +870,8 @@ export function buildStructuredMinuteContent(
   typeId?: number,
   data?: Record<string, any>
 ) {
+  if (typeId === 7) return ''
+
   const sections = typeId
     ? STRUCTURED_TEMPLATE_SECTIONS[typeId]
     : undefined

@@ -15,9 +15,15 @@ export const publicApi = axios.create({
 
 // Cho phép React set navigate function để tránh window.location.replace (full page reload)
 let _customNavigate: ((path: string) => void) | null = null
+let _pendingRedirect: string | null = null
 
 export function setNavigateFn(navigate: (path: string) => void) {
   _customNavigate = navigate
+  if (_pendingRedirect) {
+    const path = _pendingRedirect
+    _pendingRedirect = null
+    _customNavigate(path)
+  }
 }
 
 export function handleUnauthorizedResponse() {
@@ -25,7 +31,7 @@ export function handleUnauthorizedResponse() {
   if (_customNavigate) {
     _customNavigate('/login')
   } else {
-    window.location.replace('/login')
+    _pendingRedirect = '/login'
   }
 }
 

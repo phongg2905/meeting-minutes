@@ -60,10 +60,6 @@ export const queryKeys = {
       ['support-tickets', 'list', params] as const,
     detail: (id: number) => ['support-ticket-detail', id] as const,
   },
-  supportRequests: {
-    list: (params?: Record<string, any>) =>
-      ['support-requests', 'list', params] as const,
-  },
 
   // ─── Notifications ───
   notifications: {

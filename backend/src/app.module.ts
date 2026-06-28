@@ -12,7 +12,6 @@ import { MinuteParticipantsModule } from './minute-participants/minute-participa
 import { MinuteAttachmentsModule } from './minute-attachments/minute-attachments.module';
 import { ActivityLogsModule } from './activity-logs/activity-logs.module';
 import { BackupLogsModule } from './backup-logs/backup-logs.module';
-import { SupportRequestsModule } from './support-requests/support-requests.module';
 import { SupportTicketsModule } from './support-tickets/support-tickets.module';
 import { HealthModule } from './health/health.module';
 import { ManagerRoleRequestsModule } from './manager-role-requests/manager-role-requests.module';
@@ -35,7 +34,6 @@ import { TasksModule } from './tasks/tasks.module';
     MinuteAttachmentsModule,
     ActivityLogsModule,
     BackupLogsModule,
-    SupportRequestsModule,
     SupportTicketsModule,
     ManagerRoleRequestsModule,
     NotificationsModule,

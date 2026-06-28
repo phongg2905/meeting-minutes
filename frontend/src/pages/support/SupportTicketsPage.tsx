@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { Button, Card, DatePicker, Form, Input, message, Modal, Select, Space, Table, Tag, Typography, Upload, Divider, Empty, Grid, Pagination, Skeleton } from 'antd'
 import { PlusOutlined, SearchOutlined, SendOutlined, CheckCircleOutlined, InfoCircleOutlined, UploadOutlined, PaperClipOutlined, UserOutlined, CrownOutlined, ClockCircleOutlined, MessageOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { keepPreviousDataPlaceholder } from '../../utils/queryKeys'
 import { supportTicketsService } from '../../services'
 import { useAuthStore } from '../../store/authStore'
 import { formatDateTime, isAdmin } from '../../utils'
@@ -63,7 +62,6 @@ export default function SupportTicketsPage() {
       date_from: dateRange?.[0]?.format('YYYY-MM-DD'),
       date_to: dateRange?.[1]?.format('YYYY-MM-DD'),
     }),
-    placeholderData: keepPreviousDataPlaceholder,
   })
   const hasExistingData = (data?.data?.length ?? 0) > 0
 
@@ -71,7 +69,6 @@ export default function SupportTicketsPage() {
     queryKey: ['support-ticket-detail', selectedTicket?.ticket_id],
     queryFn: () => supportTicketsService.getOne(selectedTicket!.ticket_id),
     enabled: !!selectedTicket,
-    placeholderData: keepPreviousDataPlaceholder,
   })
 
   const createMutation = useMutation({
@@ -180,6 +177,14 @@ export default function SupportTicketsPage() {
       id: selectedTicket.ticket_id,
       resolution: normalizedResult,
     })
+  }
+
+  const handleDownloadAttachment = async (id: number, fileName: string) => {
+    try {
+      await supportTicketsService.downloadAttachment(id, fileName)
+    } catch (err) {
+      message.error('Không thể tải xuống tệp đính kèm')
+    }
   }
 
   const canSubmitComplete =
@@ -304,9 +309,15 @@ export default function SupportTicketsPage() {
             {msg.attachments?.length > 0 && (
               <div style={{ marginTop: 8, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                 {msg.attachments.map((att) => (
-                  <Tag key={att.attachment_id} icon={<PaperClipOutlined />} color="blue">
-                    {att.file_name}
-                  </Tag>
+                  <a
+                    key={att.attachment_id}
+                    onClick={() => handleDownloadAttachment(att.attachment_id, att.file_name)}
+                    style={{ cursor: 'pointer', display: 'inline-block' }}
+                  >
+                    <Tag icon={<PaperClipOutlined />} color="blue" style={{ cursor: 'pointer' }}>
+                      {att.file_name}
+                    </Tag>
+                  </a>
                 ))}
               </div>
             )}

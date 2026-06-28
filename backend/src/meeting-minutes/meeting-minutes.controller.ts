@@ -22,6 +22,12 @@ export class MeetingMinutesController {
     return this.service.findAll(query, req.user.user_id, req.user.role_id);
   }
 
+  @Get('dashboard')
+  @ApiOperation({ summary: 'Tổng quan dashboard biên bản' })
+  getDashboard(@Request() req) {
+    return this.service.getDashboard(req.user.user_id, req.user.role_id);
+  }
+
   @Get(':id')
   findOne(@Param('id', ParseIntPipe) id: number, @Request() req) {
     return this.service.findOne(id, req.user.user_id, req.user.role_id);

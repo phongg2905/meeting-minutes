@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { Table, Card, Tag, Typography, Avatar, Row, Col, Input, Select, DatePicker } from 'antd'
 import { AuditOutlined, SearchOutlined } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
-import { keepPreviousDataPlaceholder } from '../../utils/queryKeys'
 import { activityLogsService } from '../../services'
 import { formatDateTime } from '../../utils'
 import { TableRefreshIndicator, TableSkeleton } from '../../components/common'
@@ -55,7 +54,6 @@ export default function ActivityLogsPage() {
       date_to: dateRange?.[1]?.format('YYYY-MM-DD'),
     }),
     refetchInterval: 30000,
-    placeholderData: keepPreviousDataPlaceholder,
   })
   const hasExistingData = (data?.data?.length ?? 0) > 0
 

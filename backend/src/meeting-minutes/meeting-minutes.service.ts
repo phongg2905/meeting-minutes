@@ -31,7 +31,9 @@ export class MeetingMinutesService {
 
   async findAll(query: QueryMeetingMinuteDto, userId: number, roleId: number) {
     const where: any = {};
-    if (!isSystemAdmin(roleId)) {
+    if (query.mine === 'true') {
+      where.created_by = userId;
+    } else if (!isSystemAdmin(roleId)) {
       where.OR = [
         ...(canWriteMinutes(roleId) ? [{ created_by: userId }] : []),
         { status: MINUTE_STATUS_COMPLETED, is_public: true, creator: { status: USER_STATUS_ACTIVE } },
@@ -91,6 +93,44 @@ export class MeetingMinutesService {
       total,
       page: Number(query.page) || 1,
       limit: Number(query.limit) || 10,
+    };
+  }
+
+  async getDashboard(userId: number, roleId: number) {
+    const where = this.buildAccessWhere(userId, roleId);
+
+    const [total, publicCount, editingCount, recentMinutes] = await Promise.all([
+      this.prisma.meetingMinute.count({ where }),
+      this.prisma.meetingMinute.count({
+        where: { ...where, is_public: true },
+      }),
+      this.prisma.meetingMinute.count({
+        where: { ...where, status: MINUTE_STATUS_DRAFT },
+      }),
+      this.prisma.meetingMinute.findMany({
+        where,
+        include: {
+          minute_type: true,
+          creator: { select: { user_id: true, full_name: true, status: true } },
+          attachments: { select: { is_public_safe: true } },
+          _count: { select: { tasks: true, participants: true, attachments: true } },
+        },
+        orderBy: { created_at: 'desc' },
+        take: 5,
+      }),
+    ]);
+
+    return {
+      stats: {
+        total,
+        public: publicCount,
+        private: Math.max(total - publicCount, 0),
+        editing: editingCount,
+      },
+      recentMinutes: recentMinutes.map((minute) => this.toListItem(
+        minute,
+        isSystemAdmin(roleId) || minute.created_by === userId ? 'owner' : 'authenticated_public',
+      )),
     };
   }
 
@@ -160,8 +200,8 @@ export class MeetingMinutesService {
           title: dto.title,
           class_name: dto.class_name,
           meeting_date: new Date(dto.meeting_date),
-          start_time: new Date(`1970-01-01T${dto.start_time}:00`),
-          end_time: new Date(`1970-01-01T${dto.end_time}:00`),
+          start_time: this.parseTimeString(dto.start_time),
+          end_time: this.parseTimeString(dto.end_time),
           location: dto.location,
           meeting_form: dto.meeting_form,
           host_name: dto.host_name,
@@ -235,8 +275,8 @@ export class MeetingMinutesService {
             title: dto.title,
             class_name: dto.class_name,
             meeting_date: dto.meeting_date ? new Date(dto.meeting_date) : undefined,
-            start_time: dto.start_time ? new Date(`1970-01-01T${dto.start_time}:00`) : undefined,
-            end_time: dto.end_time ? new Date(`1970-01-01T${dto.end_time}:00`) : undefined,
+            start_time: dto.start_time ? this.parseTimeString(dto.start_time) : undefined,
+            end_time: dto.end_time ? this.parseTimeString(dto.end_time) : undefined,
             location: dto.location,
             meeting_form: dto.meeting_form,
             host_name: dto.host_name,
@@ -329,6 +369,15 @@ export class MeetingMinutesService {
         target_table: 'meeting_minutes',
         target_id: id,
       }, [userId]);
+    } else if (existing.is_public) {
+      // Biên bản vừa bị thu hồi công khai → thông báo cho người dùng không phải Admin
+      await this.notifications.createForRoles([ROLE_STANDARD_USER, ROLE_MINUTE_MANAGER], {
+        title: 'Biên bản công khai đã bị thu hồi',
+        message: `Biên bản "${existing.minute_code} - ${existing.title}" không còn được công khai`,
+        type: 'minute',
+        target_table: 'meeting_minutes',
+        target_id: id,
+      }, [userId]);
     }
     return minute;
   }
@@ -375,6 +424,17 @@ export class MeetingMinutesService {
     }
   }
 
+  private buildAccessWhere(userId: number, roleId: number) {
+    const where: any = {};
+    if (!isSystemAdmin(roleId)) {
+      where.OR = [
+        ...(canWriteMinutes(roleId) ? [{ created_by: userId }] : []),
+        { status: MINUTE_STATUS_COMPLETED, is_public: true, creator: { status: USER_STATUS_ACTIVE } },
+      ];
+    }
+    return where;
+  }
+
   private toListItem(minute: any, scope: MinuteViewScope) {
     const safeCreator = minute.creator
       ? {
@@ -388,9 +448,10 @@ export class MeetingMinutesService {
       : minute._count?.attachments;
 
     return {
-      minute_id: minute.minute_id,
-      minute_code: minute.minute_code,
-      title: minute.title,
+          minute_id: minute.minute_id,
+          minute_code: minute.minute_code,
+          created_by: minute.created_by,
+          title: minute.title,
       class_name: minute.class_name,
       meeting_date: minute.meeting_date,
       start_time: minute.start_time,
@@ -415,10 +476,10 @@ export class MeetingMinutesService {
 
   private toOwnerDetail(minute: any) {
     return {
-      minute_id: minute.minute_id,
-      minute_code: minute.minute_code,
-      type_id: minute.type_id,
-      created_by: minute.created_by,
+          minute_id: minute.minute_id,
+          minute_code: minute.minute_code,
+          type_id: minute.type_id,
+          created_by: minute.created_by,
       title: minute.title,
       class_name: minute.class_name,
       meeting_date: minute.meeting_date,
@@ -540,7 +601,17 @@ export class MeetingMinutesService {
   }
 
   private toTimeString(date: Date) {
-    return date.toISOString().slice(11, 16);
+    const hours = String(date.getUTCHours()).padStart(2, '0');
+    const minutes = String(date.getUTCMinutes()).padStart(2, '0');
+    return `${hours}:${minutes}`;
+  }
+
+  private parseTimeString(time: string) {
+    const [hours, minutes] = time.split(':').map((part) => Number(part));
+    if (!Number.isInteger(hours) || !Number.isInteger(minutes)) {
+      throw new BadRequestException('Giờ không hợp lệ');
+    }
+    return new Date(Date.UTC(1970, 0, 1, hours, minutes, 0));
   }
 
   private isValidStatus(status: string) {
@@ -573,7 +644,7 @@ export class MeetingMinutesService {
 
   private parseDateSafe(value: string | undefined): Date | undefined {
     if (!value) return undefined;
-    const date = new Date(value);
+    const date = new Date(`${value}T00:00:00.000+07:00`);
     if (isNaN(date.getTime())) throw new BadRequestException('Ngày tháng không hợp lệ');
     return date;
   }

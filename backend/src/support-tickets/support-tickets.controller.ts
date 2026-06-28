@@ -8,6 +8,7 @@ import {
   Post,
   Query,
   Request,
+  Res,
   UploadedFile,
   UploadedFiles,
   UseGuards,
@@ -15,6 +16,8 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import { ApiBearerAuth, ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { memoryStorage } from 'multer';
+import type { Response } from 'express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { SupportTicketsService } from './support-tickets.service';
 import { CreateTicketDto } from './dto/create-ticket.dto';
@@ -51,7 +54,7 @@ export class SupportTicketsController {
   @Post(':id/messages')
   @ApiOperation({ summary: 'Gửi message vào ticket (User: WAITING_FOR_USER, Admin: PROCESSING)' })
   @ApiConsumes('multipart/form-data')
-  @UseInterceptors(FilesInterceptor('files', 10))
+  @UseInterceptors(FilesInterceptor('files', 5, { storage: memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } }))
   addMessage(
     @Param('id', ParseIntPipe) id: number,
     @Request() req,
@@ -79,5 +82,36 @@ export class SupportTicketsController {
     @Body() dto: CompleteTicketDto,
   ) {
     return this.service.complete(id, req.user.user_id, req.user.role_id, dto);
+  }
+
+  @Get('attachments/:id/download')
+  @ApiOperation({ summary: 'Tải tệp đính kèm của ticket' })
+  async download(
+    @Param('id', ParseIntPipe) id: number,
+    @Request() req,
+    @Res() res: Response,
+  ) {
+    const { attachment, content } = await this.service.getDownloadAttachment(
+      id,
+      req.user.user_id,
+      req.user.role_id,
+    );
+    const encodedName = encodeURIComponent(attachment.file_name).replace(
+      /[!'()*]/g,
+      (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`,
+    );
+    res.setHeader(
+      'Content-Type',
+      attachment.file_type || 'application/octet-stream',
+    );
+    res.setHeader('Content-Length', content.length);
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${attachment.file_name.replace(
+        /"/g,
+        '',
+      )}"; filename*=UTF-8''${encodedName}`,
+    );
+    return res.send(content);
   }
 }

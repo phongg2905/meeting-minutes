@@ -1,5 +1,4 @@
 import { useQuery } from '@tanstack/react-query'
-import { keepPreviousDataPlaceholder } from '../../utils/queryKeys'
 import { publicMeetingMinutesService } from '../../services'
 import { Button, Card, Col, DatePicker, Empty, Input, Row, Table, Tag, Typography } from 'antd'
 import { useMemo, useState } from 'react'
@@ -27,7 +26,6 @@ export default function PublicMeetingsListPage() {
       page,
       limit: 10,
     }),
-    placeholderData: keepPreviousDataPlaceholder,
   })
   const hasExistingData = (data?.data?.length ?? 0) > 0
 

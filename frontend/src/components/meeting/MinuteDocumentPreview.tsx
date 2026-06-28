@@ -3,7 +3,6 @@ import type React from 'react'
 import { MeetingMinute } from '../../types'
 import {
   getAttendanceSummary,
-  getMinuteTypeName,
   getPrintableMinuteDate,
   getPrintableMinuteTime,
   splitLines,
@@ -147,7 +146,7 @@ function DynamicPreviewTable({
           <tr key={index}>
             {columns.map((column) => (
               <td key={column.key} style={{ border: '1px solid #111', padding: '8px 10px', minHeight: 30 }}>
-                {row?.[column.key] || ''}
+                {row?.[column.key] ?? ''}
               </td>
             ))}
           </tr>
@@ -217,7 +216,7 @@ function DetailedClassMeetingPreview({ minute }: { minute: Partial<MeetingMinute
       <TextBlock value={String(data.recommendations || '')} minLines={3} />
 
       <div style={{ marginTop: 18 }}>
-        Biên bản kết thúc vào hồi {time.end} cùng ngày.
+        Cuộc họp kết thúc vào hồi {time.end} cùng ngày.
       </div>
       <div>Biên bản được in thành {text(data.copies_count, '03')} bản có giá trị như nhau.</div>
 
@@ -446,7 +445,7 @@ function SemesterSummaryPreview({ minute }: { minute: Partial<MeetingMinute> }) 
       <TextBlock value={String(data.comments || '')} minLines={1} />
 
       <div style={{ marginTop: 18 }}>
-        Biên bản kết thúc vào {time.end} cùng ngày
+        Cuộc họp kết thúc vào {time.end} cùng ngày
       </div>
 
       <div className="signature-row" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginTop: 20, textAlign: 'center' }}>
@@ -632,6 +631,52 @@ function OpeningSchoolYearPreview({ minute }: { minute: Partial<MeetingMinute> }
   )
 }
 
+function OtherMinutePreview({ minute }: { minute: Partial<MeetingMinute> }) {
+  const data = minute.template_data || {}
+  const attendance = getAttendanceSummary(minute)
+  const time = getPrintableMinuteTime(minute)
+  const copiesCount = String(data.copies_count || '......')
+  const schoolName = String(data.school_name || '')
+  const content = minute.discussion_content && minute.discussion_content !== 'Chưa nhập nội dung'
+    ? minute.discussion_content
+    : minute.purpose
+
+  return (
+    <div className="minute-document" style={documentStyle}>
+      <Header />
+
+      <div style={{ marginTop: 22 }}>
+        <div>Hôm nay, ngày {getPrintableMinuteDate(minute)}</div>
+        <div>Tại phòng họp: {minute.location || '........................................................................'}</div>
+        <div>
+          Lớp: {minute.class_name || '................................'}
+          {schoolName ? ` Trường: ${schoolName}` : ' Trường: ................................................'}
+        </div>
+      </div>
+
+      <div style={labelStyle}>I. Thành phần tham dự</div>
+      <div>
+        1. Thầy/Cô: {teacherText(data, '................................', 'Phụ trách / tham dự')}
+      </div>
+      <div>2. Chủ trì cuộc họp: {minute.host_name || '................................'} </div>
+      <div>3. Thư ký cuộc họp: {minute.secretary_name || '................................'}</div>
+      <div>
+        4. Sĩ số học sinh của lớp: {attendance.total}; có mặt {attendance.present}; vắng mặt {attendance.absent}
+      </div>
+
+      <div style={labelStyle}>II. Nội dung</div>
+      <TextBlock value={content} />
+
+      <div style={{ marginTop: 18 }}>
+        Cuộc họp kết thúc vào hồi {time.end} cùng ngày.
+      </div>
+      <div>Biên bản được lập thành {copiesCount} bản và có giá trị như nhau.</div>
+
+      <SignatureRow labels={['Chủ trì', 'Thư ký']} />
+    </div>
+  )
+}
+
 export default function MinuteDocumentPreview({ minute, typeName }: Props) {
   if (minute.type_id === 1) {
     return <DetailedClassMeetingPreview minute={minute} />
@@ -657,9 +702,12 @@ export default function MinuteDocumentPreview({ minute, typeName }: Props) {
     return <OpeningSchoolYearPreview minute={minute} />
   }
 
+  if (minute.type_id === 7) {
+    return <OtherMinutePreview minute={minute} />
+  }
+
   const attendance = getAttendanceSummary(minute)
   const time = getPrintableMinuteTime(minute)
-  const resolvedTypeName = getMinuteTypeName(minute.type_id, typeName)
   const signatureLabels = minute.type_id === 2
     ? ['Chủ tọa', 'Thư ký', 'Giáo viên chủ nhiệm']
     : minute.type_id === 4 || minute.type_id === 5
@@ -670,17 +718,10 @@ export default function MinuteDocumentPreview({ minute, typeName }: Props) {
     <div className="minute-document" style={documentStyle}>
       <Header />
 
-      {resolvedTypeName && (
-        <div style={{ textAlign: 'center', marginTop: 6, fontStyle: 'italic' }}>
-          {resolvedTypeName}
-        </div>
-      )}
-
       <div style={{ marginTop: 22 }}>
         <div>Hôm nay, ngày {getPrintableMinuteDate(minute)}</div>
         <div>Tại phòng họp: {minute.location || '........................................................................'}</div>
         <div>Lớp: {minute.class_name || '................................'} Trường: ................................................</div>
-        {minute.purpose && <div>{minute.purpose}</div>}
       </div>
 
       <div style={labelStyle}>I. Thành phần tham dự</div>
@@ -690,7 +731,7 @@ export default function MinuteDocumentPreview({ minute, typeName }: Props) {
       <div>4. Sĩ số học sinh của lớp: {attendance.total}; có mặt {attendance.present}; vắng mặt {attendance.absent}</div>
 
       <div style={labelStyle}>II. Nội dung</div>
-      <TextBlock value={minute.discussion_content} />
+      <TextBlock value={minute.discussion_content || minute.purpose} />
 
       {minute.type_id === 2 && (
         <>
@@ -715,7 +756,7 @@ export default function MinuteDocumentPreview({ minute, typeName }: Props) {
       )}
 
       <div style={{ marginTop: 18 }}>
-        Biên bản kết thúc vào hồi {time.end} cùng ngày.
+        Cuộc họp kết thúc vào hồi {time.end} cùng ngày.
       </div>
       <div>Biên bản được lập thành ........ bản và có giá trị như nhau.</div>
 

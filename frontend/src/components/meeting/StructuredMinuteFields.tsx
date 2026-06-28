@@ -1,4 +1,4 @@
-import { Button, Card, Col, Empty, Form, Input, Row, Space, Table, Typography } from 'antd'
+import { Button, Card, Col, Form, Input, Row, Space, Table, Typography } from 'antd'
 import { DeleteOutlined, PlusOutlined } from '@ant-design/icons'
 import { STRUCTURED_TEMPLATE_SECTIONS } from '../../utils/minuteTemplates'
 
@@ -13,7 +13,7 @@ export default function StructuredMinuteFields({ typeId }: Props) {
   const sections = typeId ? STRUCTURED_TEMPLATE_SECTIONS[typeId] : undefined
 
   if (!sections?.length) {
-    return <Empty description="Chọn loại biên bản để hiển thị các trường nội dung tương ứng" />
+    return null
   }
 
   return (
