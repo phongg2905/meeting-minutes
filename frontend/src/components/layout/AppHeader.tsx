@@ -1,13 +1,13 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import {
   Layout, Button, Avatar, Dropdown, Typography, Badge, Space,
-  Input, Tooltip, Breadcrumb,
+  Tooltip, Breadcrumb,
 } from 'antd'
 import {
   BellOutlined, UserOutlined, LogoutOutlined, KeyOutlined,
   MenuOutlined, HomeOutlined, SunOutlined, MoonOutlined,
-  FileTextOutlined, PlusOutlined, SearchOutlined,
+  FileTextOutlined, PlusOutlined,
   MenuFoldOutlined, MenuUnfoldOutlined,
 } from '@ant-design/icons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
@@ -74,9 +74,6 @@ export default function AppHeader({
   const location = useLocation()
   const queryClient = useQueryClient()
   const { user, logout } = useAuthStore()
-  const [globalSearchOpen, setGlobalSearchOpen] = useState(false)
-  const [searchValue, setSearchValue] = useState('')
-  const searchRef = useRef<HTMLInputElement>(null)
   const breadcrumbItems = useBreadcrumb(location.pathname, navigate)
 
   const notificationQueryKey = ['notifications', user?.user_id]
@@ -111,32 +108,6 @@ export default function AppHeader({
       queryClient.invalidateQueries({ queryKey: unreadQueryKey })
     },
   })
-
-  // Ctrl+K / Cmd+K handler
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
-        e.preventDefault()
-        setGlobalSearchOpen(true)
-        setTimeout(() => searchRef.current?.focus(), 100)
-      }
-      if (e.key === 'Escape' && globalSearchOpen) {
-        setGlobalSearchOpen(false)
-        setSearchValue('')
-      }
-    }
-    window.addEventListener('keydown', handler)
-    return () => window.removeEventListener('keydown', handler)
-  }, [globalSearchOpen])
-
-  const handleGlobalSearch = (value: string) => {
-    if (value.trim()) {
-      setSearchValue(value)
-      navigate(`/meetings?search=${encodeURIComponent(value.trim())}`)
-      setGlobalSearchOpen(false)
-      setSearchValue('')
-    }
-  }
 
   const getNotificationPath = (notification: Notification) => {
     if (notification.target_table === 'meeting_minutes' && notification.target_id)
@@ -232,20 +203,6 @@ export default function AppHeader({
 
       {/* Right side */}
       <Space size={4} style={{ flexShrink: 0 }}>
-        {/* Global Search */}
-        <Tooltip title="Tìm kiếm (Ctrl+K)">
-          <Button
-            type="text"
-            icon={<SearchOutlined style={{ fontSize: 18 }} />}
-            onClick={() => {
-              setGlobalSearchOpen(true)
-              setTimeout(() => searchRef.current?.focus(), 100)
-            }}
-            style={{ color: 'var(--color-text-secondary)' }}
-            aria-label="Tìm kiếm"
-          />
-        </Tooltip>
-
         {/* Create Button */}
         {canWriteMinutes(user?.role_id) && location.pathname !== '/meetings/create' && (
           <Button
@@ -438,77 +395,6 @@ export default function AppHeader({
           </div>
         </Dropdown>
       </Space>
-
-      {/* Global Search Modal */}
-      {globalSearchOpen && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            zIndex: 1000,
-            display: 'flex',
-            justifyContent: 'center',
-            paddingTop: '20vh',
-          }}
-          onClick={() => {
-            setGlobalSearchOpen(false)
-            setSearchValue('')
-          }}
-        >
-          <div
-            style={{
-              position: 'absolute',
-              inset: 0,
-              background: 'rgba(0,0,0,0.4)',
-            }}
-          />
-          <div
-            style={{
-              position: 'relative',
-              width: 560,
-              maxWidth: 'calc(100vw - 32px)',
-              background: 'var(--color-surface-raised)',
-              borderRadius: 20,
-              boxShadow: 'var(--shadow-xl)',
-              border: '1px solid var(--color-border)',
-              overflow: 'hidden',
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--color-border-light)' }}>
-              <Input
-                ref={searchRef as any}
-                prefix={<SearchOutlined style={{ color: 'var(--color-text-tertiary)' }} />}
-                placeholder="Tìm kiếm biên bản..."
-                value={searchValue}
-                onChange={(e) => setSearchValue(e.target.value)}
-                onPressEnter={() => handleGlobalSearch(searchValue)}
-                bordered={false}
-                style={{ fontSize: 16, background: 'transparent' }}
-                suffix={
-                  <kbd
-                    style={{
-                      padding: '2px 6px',
-                      borderRadius: 4,
-                      border: '1px solid var(--color-border)',
-                      fontSize: 11,
-                      color: 'var(--color-text-tertiary)',
-                      background: 'var(--color-surface-muted)',
-                    }}
-                  >
-                    ESC
-                  </kbd>
-                }
-              />
-            </div>
-            <div style={{ padding: '16px 20px' }}>
-              <Text style={{ fontSize: 13, color: 'var(--color-text-tertiary)' }}>
-                Nhập từ khóa và nhấn Enter để tìm kiếm biên bản
-              </Text>
-            </div>
-          </div>
-        </div>
-      )}
 
       <style>{`
         @media (max-width: 768px) {
