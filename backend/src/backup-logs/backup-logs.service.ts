@@ -378,8 +378,12 @@ export class BackupLogsService {
     })) ?? [];
 
     const supportMessages = data.supportMessages?.map((item: any) => ({
-      ...item,
-      sent_at: item.sent_at ? new Date(item.sent_at) : new Date(item.created_at ?? Date.now()),
+      message_id: item.message_id,
+      ticket_id: item.ticket_id,
+      sender_id: item.sender_id,
+      sender_type: item.sender_type,
+      content: item.content,
+      created_at: item.created_at ? new Date(item.created_at) : item.sent_at ? new Date(item.sent_at) : new Date(),
     })) ?? [];
 
     const supportAttachments = data.supportAttachments?.map((item: any) => ({
@@ -390,7 +394,7 @@ export class BackupLogsService {
       file_type: item.file_type,
       file_size: item.file_size,
       uploaded_by: item.uploaded_by,
-      uploaded_at: item.uploaded_at ? new Date(item.uploaded_at) : new Date(),
+      created_at: item.created_at ? new Date(item.created_at) : item.uploaded_at ? new Date(item.uploaded_at) : new Date(),
     })) ?? [];
 
     const managerRoleRequests = data.managerRoleRequests?.map((item: any) => ({
