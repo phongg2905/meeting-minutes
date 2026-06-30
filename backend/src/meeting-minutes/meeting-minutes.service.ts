@@ -45,8 +45,8 @@ export class MeetingMinutesService {
       this.prisma.meetingMinute.findMany({
         where,
         include: {
-          minute_type: true,
-          creator: { select: { user_id: true, full_name: true, status: true } },
+          minute_type: { select: { type_id: true, type_name: true } },
+          creator: { select: { user_id: true, full_name: true } },
           attachments: { select: { is_public_safe: true } },
           _count: { select: { tasks: true, participants: true, attachments: true } },
         },
@@ -76,7 +76,7 @@ export class MeetingMinutesService {
       this.prisma.meetingMinute.findMany({
         where,
         include: {
-          minute_type: true,
+          minute_type: { select: { type_id: true, type_name: true } },
           creator: { select: { user_id: true, full_name: true } },
           attachments: { select: { is_public_safe: true } },
           _count: { select: { tasks: true, participants: true, attachments: true } },
@@ -110,8 +110,8 @@ export class MeetingMinutesService {
       this.prisma.meetingMinute.findMany({
         where,
         include: {
-          minute_type: true,
-          creator: { select: { user_id: true, full_name: true, status: true } },
+          minute_type: { select: { type_id: true, type_name: true } },
+          creator: { select: { user_id: true, full_name: true } },
           attachments: { select: { is_public_safe: true } },
           _count: { select: { tasks: true, participants: true, attachments: true } },
         },
@@ -138,8 +138,8 @@ export class MeetingMinutesService {
     const minute = await this.prisma.meetingMinute.findUnique({
       where: { minute_id: id },
       include: {
-        minute_type: true,
-        creator: { select: { user_id: true, full_name: true, email: true, status: true } },
+        minute_type: { select: { type_id: true, type_name: true } },
+        creator: { select: { user_id: true, full_name: true, status: true } },
         tasks: { orderBy: { task_id: 'asc' } },
         participants: { orderBy: { participant_id: 'asc' } },
         attachments: {
@@ -159,7 +159,7 @@ export class MeetingMinutesService {
     const minute = await this.prisma.meetingMinute.findUnique({
       where: { minute_id: id },
       include: {
-        minute_type: true,
+        minute_type: { select: { type_id: true, type_name: true } },
         creator: { select: { user_id: true, full_name: true, status: true } },
         tasks: { orderBy: { task_id: 'asc' } },
         participants: { orderBy: { participant_id: 'asc' } },

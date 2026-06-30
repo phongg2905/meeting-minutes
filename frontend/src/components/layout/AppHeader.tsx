@@ -11,7 +11,7 @@ import {
   MenuFoldOutlined, MenuUnfoldOutlined,
 } from '@ant-design/icons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { keepPreviousDataPlaceholder } from '../../utils/queryKeys'
+import { keepPreviousDataPlaceholder, queryKeys } from '../../utils/queryKeys'
 import { useAuthStore } from '../../store/authStore'
 import { notificationsService } from '../../services'
 import { canWriteMinutes, formatDateTime } from '../../utils'
@@ -75,21 +75,24 @@ export default function AppHeader({
   const queryClient = useQueryClient()
   const { user, logout } = useAuthStore()
   const breadcrumbItems = useBreadcrumb(location.pathname, navigate)
+  const [notificationsOpen, setNotificationsOpen] = useState(false)
+  const summaryQueryKey = queryKeys.notifications.sidebarSummary()
+  const notificationQueryKey = queryKeys.notifications.all(20)
 
-  const notificationQueryKey = ['notifications', user?.user_id]
-  const unreadQueryKey = ['notifications-unread-count', user?.user_id]
-
-  const { data: notifications = [] } = useQuery({
-    queryKey: notificationQueryKey,
-    queryFn: () => notificationsService.getAll(20),
-    refetchInterval: 30000,
+  const { data: summaryData } = useQuery({
+    queryKey: summaryQueryKey,
+    queryFn: notificationsService.sidebarSummary,
+    enabled: !!user?.user_id,
+    staleTime: 30_000,
+    refetchInterval: 60_000,
     placeholderData: keepPreviousDataPlaceholder,
   })
 
-  const { data: unreadData } = useQuery({
-    queryKey: unreadQueryKey,
-    queryFn: notificationsService.unreadCount,
-    refetchInterval: 30000,
+  const { data: notifications = [], isFetching: isNotificationsFetching } = useQuery({
+    queryKey: notificationQueryKey,
+    queryFn: () => notificationsService.getAll(20),
+    enabled: notificationsOpen && !!user?.user_id,
+    staleTime: 30_000,
     placeholderData: keepPreviousDataPlaceholder,
   })
 
@@ -97,7 +100,7 @@ export default function AppHeader({
     mutationFn: notificationsService.markAsRead,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: notificationQueryKey })
-      queryClient.invalidateQueries({ queryKey: unreadQueryKey })
+      queryClient.invalidateQueries({ queryKey: summaryQueryKey })
     },
   })
 
@@ -105,7 +108,7 @@ export default function AppHeader({
     mutationFn: notificationsService.markAllAsRead,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: notificationQueryKey })
-      queryClient.invalidateQueries({ queryKey: unreadQueryKey })
+      queryClient.invalidateQueries({ queryKey: summaryQueryKey })
     },
   })
 
@@ -237,6 +240,8 @@ export default function AppHeader({
 
         {/* Notifications */}
         <Dropdown
+          open={notificationsOpen}
+          onOpenChange={setNotificationsOpen}
           popupRender={() => (
             <div
               style={{
@@ -262,7 +267,7 @@ export default function AppHeader({
                 <Button
                   type="link"
                   size="small"
-                  disabled={!unreadData?.count}
+                  disabled={!summaryData?.totalUnread}
                   loading={markAllAsReadMutation.isPending}
                   onClick={() => markAllAsReadMutation.mutate()}
                   style={{ fontSize: 12 }}
@@ -271,7 +276,18 @@ export default function AppHeader({
                 </Button>
               </div>
               <div style={{ maxHeight: 420, overflow: 'auto' }}>
-                {notifications.length > 0 ? (
+                {isNotificationsFetching && notifications.length === 0 ? (
+                  <div
+                    style={{
+                      padding: 32,
+                      textAlign: 'center',
+                      color: 'var(--color-text-secondary)',
+                      fontSize: 14,
+                    }}
+                  >
+                    Đang tải thông báo
+                  </div>
+                ) : notifications.length > 0 ? (
                   notifications.map((item: Notification) => (
                     <div
                       key={item.notification_id}
@@ -333,7 +349,7 @@ export default function AppHeader({
           trigger={['click']}
           placement="bottomRight"
         >
-          <Badge count={unreadData?.count || 0} size="small" offset={[-2, 2]}>
+          <Badge count={summaryData?.totalUnread || 0} size="small" offset={[-2, 2]}>
             <Button
               type="text"
               icon={<BellOutlined style={{ fontSize: 18 }} />}

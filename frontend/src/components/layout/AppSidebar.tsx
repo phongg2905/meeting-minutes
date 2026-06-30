@@ -111,6 +111,7 @@ export default function AppSidebar({ collapsed, onToggle, mobileOpen, onMobileCl
   const { data: summary, isError: summaryError } = useQuery({
     queryKey: queryKeys.notifications.sidebarSummary(),
     queryFn: notificationsService.sidebarSummary,
+    enabled: !!user?.user_id,
     staleTime: 30_000,
     refetchInterval: 60_000,
     refetchOnWindowFocus: true,
@@ -239,8 +240,8 @@ export default function AppSidebar({ collapsed, onToggle, mobileOpen, onMobileCl
       case path === '/dashboard':
         if (user) {
           queryClient.prefetchQuery({
-            queryKey: ['meeting-minutes', 'dashboard', user.user_id],
-            queryFn: () => meetingMinutesService.getAll({ limit: 100 }),
+            queryKey: queryKeys.meetings.dashboard(user.user_id),
+            queryFn: () => meetingMinutesService.getDashboard(),
             staleTime: 60000,
           })
         }

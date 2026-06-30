@@ -68,6 +68,7 @@ export default function MeetingsListPage({ scope = 'all' }: MeetingsListPageProp
       page,
       limit: 10,
     }),
+    enabled: !!user?.user_id,
   })
   const hasExistingData = (data?.data?.length ?? 0) > 0
 

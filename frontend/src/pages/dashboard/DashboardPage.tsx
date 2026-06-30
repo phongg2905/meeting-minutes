@@ -21,13 +21,14 @@ export default function DashboardPage() {
   const { data: dashboardData, isLoading, isError, refetch } = useQuery({
     queryKey: ['meeting-minutes', 'dashboard', user?.user_id],
     queryFn: meetingMinutesService.getDashboard,
+    enabled: !!user?.user_id,
     placeholderData: keepPreviousDataPlaceholder,
   })
 
   const { data: logsData } = useQuery({
     queryKey: ['activity-logs'],
     queryFn: () => activityLogsService.getAll({ page: 1, limit: 8 }),
-    enabled: isAdmin(user?.role_id),
+    enabled: isAdmin(user?.role_id) && !!user?.user_id,
     placeholderData: keepPreviousDataPlaceholder,
   })
   const recentLogs = logsData?.data || []

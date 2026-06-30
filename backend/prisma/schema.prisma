@@ -46,6 +46,7 @@ model User {
   resolved_tickets          SupportTicket[]      @relation("ResolvedTickets")
   role                      Role                 @relation(fields: [role_id], references: [role_id])
 
+  @@index([role_id, status, created_at])
   @@map("users")
 }
 
@@ -92,6 +93,9 @@ model MeetingMinute {
   participants       MinuteParticipant[]
   tasks              MinuteTask[]
 
+  @@index([created_by, created_at])
+  @@index([status, is_public, created_at])
+  @@index([type_id, meeting_date])
   @@map("meeting_minutes")
 }
 
@@ -104,6 +108,7 @@ model MinuteTask {
   task_status  String        @default("pending") @db.VarChar(20)
   minute       MeetingMinute @relation(fields: [minute_id], references: [minute_id], onDelete: Cascade)
 
+  @@index([minute_id, task_id])
   @@map("minute_tasks")
 }
 
@@ -115,6 +120,7 @@ model MinuteParticipant {
   attendance_status String        @default("present") @db.VarChar(30)
   minute            MeetingMinute @relation(fields: [minute_id], references: [minute_id], onDelete: Cascade)
 
+  @@index([minute_id, participant_id])
   @@map("minute_participants")
 }
 
@@ -131,6 +137,7 @@ model MinuteAttachment {
   minute             MeetingMinute @relation(fields: [minute_id], references: [minute_id], onDelete: Cascade)
   uploader           User          @relation(fields: [uploaded_by], references: [user_id])
 
+  @@index([minute_id, uploaded_at])
   @@map("minute_attachments")
 }
 
@@ -144,6 +151,9 @@ model ActivityLog {
   created_at    DateTime @default(now())
   user          User     @relation(fields: [user_id], references: [user_id])
 
+  @@index([user_id, created_at])
+  @@index([action_name, created_at])
+  @@index([target_table, created_at])
   @@map("activity_logs")
 }
 
@@ -163,6 +173,9 @@ model BackupLog {
   created_at    DateTime @default(now())
   performer     User     @relation(fields: [performed_by], references: [user_id])
 
+  @@index([action_type, created_at])
+  @@index([performed_by, created_at])
+  @@index([status, created_at])
   @@map("backup_logs")
 }
 
@@ -188,6 +201,8 @@ model SupportTicket {
   requester       User?            @relation("RequestedSupport", fields: [requested_by], references: [user_id])
   resolver        User?            @relation("ResolvedTickets", fields: [resolved_by], references: [user_id])
 
+  @@index([requested_by, status, created_at])
+  @@index([status, created_at])
   @@map("support_requests")
 }
 
@@ -202,6 +217,7 @@ model SupportMessage {
   sender      User                @relation(fields: [sender_id], references: [user_id])
   ticket      SupportTicket       @relation(fields: [ticket_id], references: [ticket_id], onDelete: Cascade)
 
+  @@index([ticket_id, created_at])
   @@map("support_messages")
 }
 
@@ -217,6 +233,7 @@ model SupportAttachment {
   message       SupportMessage @relation(fields: [message_id], references: [message_id], onDelete: Cascade)
   uploader      User?          @relation(fields: [uploaded_by], references: [user_id])
 
+  @@index([message_id])
   @@map("support_attachments")
 }
 
@@ -232,6 +249,7 @@ model ManagerRoleRequest {
   reviewer    User?     @relation("ManagerRoleReviewer", fields: [reviewed_by], references: [user_id])
   user        User      @relation("ManagerRoleRequester", fields: [user_id], references: [user_id], onDelete: Cascade)
 
+  @@index([user_id, status, created_at])
   @@map("manager_role_requests")
 }
 
@@ -248,6 +266,6 @@ model Notification {
   read_at         DateTime?
   user            User      @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
 
-  @@index([user_id, is_read, created_at])
+  @@index([user_id, is_read, target_table, created_at])
   @@map("notifications")
 }
