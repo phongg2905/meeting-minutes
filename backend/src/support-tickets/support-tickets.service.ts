@@ -165,16 +165,14 @@ export class SupportTicketsService {
     const [data, total] = await Promise.all([
       this.prisma.supportTicket.findMany({
         where,
-        include: {
-          requester: {
-            select: { user_id: true, full_name: true, email: true },
-          },
-          handler: {
-            select: { user_id: true, full_name: true, email: true },
-          },
-          assignee: {
-            select: { user_id: true, full_name: true, email: true },
-          },
+        select: {
+          ticket_id: true,
+          requested_by: true,
+          title: true,
+          content: true,
+          status: true,
+          category: true,
+          created_at: true,
           _count: { select: { messages: true } },
         },
         orderBy: { created_at: 'desc' },
